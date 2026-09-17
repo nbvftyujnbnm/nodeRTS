@@ -44,6 +44,25 @@ export const MAX_ACTIVE_CONSTRUCTIONS_PER_NODE = 1;
 export const NODE_SNAP_RADIUS = 20;
 /** Clicking this close to an enemy HQ centre targets the HQ itself. */
 export const HQ_CAPTURE_RADIUS = 26;
+
+/**
+ * Taking a headquarters is the win condition, so it must not be something you
+ * can reach with one lucky long line. These three make the killing blow a
+ * commitment rather than an opening move:
+ *
+ * - the assault must be launched from close range, which means dragging a long
+ *   thin chain deep into enemy ground where it can be cut,
+ * - it costs several times a normal line, so the launching node has to be
+ *   fully stocked,
+ * - and it takes long enough to land that the defender can still cut the chain
+ *   under it, which cancels the construction.
+ *
+ * Invariant: a full base must be able to afford a maximum-range assault, or
+ * headquarters could never be taken at all. Guarded by a test.
+ */
+export const HQ_ASSAULT_MAX_RANGE = 200;
+export const HQ_ASSAULT_COST_MULTIPLIER = 2.5;
+export const HQ_ASSAULT_TIME_MULTIPLIER = 5;
 /** Intersections closer than this to an existing owned node reuse that node. */
 export const JUNCTION_MERGE_EPS = 1.5;
 /** Edges shorter than this are never created (avoids degenerate geometry). */

@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { GameRoom } from '../src/game/room';
 import { addEdge, addNode } from '../src/game/world';
 import {
+  BASE_MAX_STOCK,
   BUILD_REQUEST_MIN_INTERVAL_MS,
   MAX_ACTIVE_CONSTRUCTIONS_PER_PLAYER,
   MAX_BUILD_DISTANCE,
   MAX_PLAYERS,
   MIN_BUILD_DISTANCE,
   RECONNECT_GRACE_MS,
+  WORLD_WIDTH,
   buildCostForDistance,
   buildTimeForDistance,
 } from '../src/shared/config';
@@ -26,7 +28,16 @@ describe('build validation', () => {
   it('rejects builds that are too far away', () => {
     const { room, ids } = startedRoom(2);
     const hq = hqNode(room, ids[0]);
-    const result = room.requestBuild(ids[0], hq.id, hq.x + MAX_BUILD_DISTANCE + 10, hq.y, 2_000);
+    // Aim inwards, so an over-range build cannot also be out of bounds and
+    // trip the bounds check first.
+    const inwards = hq.x > WORLD_WIDTH / 2 ? -1 : 1;
+    const result = room.requestBuild(
+      ids[0],
+      hq.id,
+      hq.x + inwards * (MAX_BUILD_DISTANCE + 10),
+      hq.y,
+      2_000,
+    );
     expect(result.ok).toBe(false);
     expect(result.reason).toContain('too far');
   });
@@ -185,7 +196,7 @@ describe('headquarters capture', () => {
       'base',
       victimHq.x + (toCentre.x / len) * 180,
       victimHq.y + (toCentre.y / len) * 180,
-      100,
+      BASE_MAX_STOCK,
     );
     addEdge(room.world, attacker, attackerHq.id, forward.id);
 

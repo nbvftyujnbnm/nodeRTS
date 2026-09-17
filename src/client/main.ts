@@ -1,4 +1,6 @@
 import {
+  HQ_ASSAULT_COST_MULTIPLIER,
+  HQ_ASSAULT_MAX_RANGE,
   MAX_BUILD_DISTANCE,
   MIN_PLAYERS,
   WORLD_HEIGHT,
@@ -56,6 +58,12 @@ const hudRoomCode = $('hud-room-code');
 const hudPlayers = $('hud-players');
 const hudSelection = $('hud-selection');
 const hudBuild = $('hud-build');
+const controlsHq = $('controls-hq');
+
+// Written from the constants so the on-screen rules cannot drift from the sim.
+controlsHq.textContent =
+  `Storm an enemy HQ from within ${HQ_ASSAULT_MAX_RANGE}px ` +
+  `(costs ${HQ_ASSAULT_COST_MULTIPLIER}x) to eliminate them`;
 
 // ---------------------------------------------------------------- state
 

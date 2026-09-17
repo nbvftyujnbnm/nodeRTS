@@ -1,5 +1,8 @@
 import {
   BUILD_DISTANCE_COST,
+  HQ_ASSAULT_COST_MULTIPLIER,
+  HQ_ASSAULT_MAX_RANGE,
+  HQ_ASSAULT_TIME_MULTIPLIER,
   MAX_ACTIVE_CONSTRUCTIONS_PER_NODE,
   MAX_ACTIVE_CONSTRUCTIONS_PER_PLAYER,
   MAX_BUILD_DISTANCE,
@@ -84,11 +87,15 @@ export function evaluateBuild(
   if (target.node && target.node.id === source.id) return fail('target is the source node');
 
   const dist = distance(source, { x: target.x, y: target.y });
-  const cost = buildCostForDistance(dist);
-  const buildTime = buildTimeForDistance(dist);
+  const assault = target.kind === 'enemyHq';
+  const cost = buildCostForDistance(dist) * (assault ? HQ_ASSAULT_COST_MULTIPLIER : 1);
+  const buildTime = buildTimeForDistance(dist) * (assault ? HQ_ASSAULT_TIME_MULTIPLIER : 1);
 
   if (dist < MIN_BUILD_DISTANCE) return fail(`too close (min ${MIN_BUILD_DISTANCE})`, dist, cost, target);
   if (dist > MAX_BUILD_DISTANCE) return fail(`too far (max ${MAX_BUILD_DISTANCE})`, dist, cost, target);
+  if (assault && dist > HQ_ASSAULT_MAX_RANGE) {
+    return fail(`get within ${HQ_ASSAULT_MAX_RANGE} to storm an HQ`, dist, cost, target);
+  }
   if (source.stock < cost) return fail('not enough resources at source', dist, cost, target);
 
   return { ok: true, reason: null, distance: dist, cost, buildTime, target };

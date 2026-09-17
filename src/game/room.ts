@@ -183,8 +183,11 @@ export class GameRoom {
     const rx = WORLD_WIDTH * 0.39;
     const ry = WORLD_HEIGHT * 0.37;
 
+    // Start on the long axis. Anchoring at -90 degrees put a 2-player match on
+    // the map's short side, leaving the HQs only ~666px apart - two builds and
+    // the game was over before anyone could react.
     ids.forEach((id, index) => {
-      const angle = -Math.PI / 2 + (index * 2 * Math.PI) / count;
+      const angle = (index * 2 * Math.PI) / count;
       const x = Math.round(cx + rx * Math.cos(angle));
       const y = Math.round(cy + ry * Math.sin(angle));
       addNode(this.world, id, 'hq', x, y, HQ_INITIAL_STOCK);

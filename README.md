@@ -267,10 +267,12 @@ the panel on the right).
 - **Redundancy is the counterplay.** If the victim has an alternate route to the
   far side, nothing is captured — only the crossed edge is severed. Building
   loops is how you make your territory un-cuttable.
-- **Headquarters can be attacked directly.** Aim a construction at an enemy HQ
-  (click within its capture radius and the target snaps to its centre). Normal
-  range, cost and build time apply. When it completes, that player is
-  eliminated.
+- **Headquarters can be stormed, but not sniped.** Aim a construction at an
+  enemy HQ and the target snaps to its centre, but the assault must be launched
+  from within **200px**, costs **2.5x** a normal line, and takes **5x** as long
+  to land. That means dragging a chain of relays right up to their door and
+  holding it there while the blow lands. Cut the chain underneath an assault
+  and it is cancelled, and everything past the cut changes hands.
 
 With 2 players, capturing the enemy HQ wins immediately. With 3+, the
 eliminated player's entire empire transfers to the attacker and the match
@@ -380,6 +382,13 @@ priority, and the required behaviours map to tests as follows:
 | 15. Last remaining player wins | `match.test.ts` |
 | 16. Reconnection restores control to the correct player | `match.test.ts` |
 
+`rush-balance.test.ts` plays the degenerate strategy - sprint one chain of
+relays at the enemy HQ - and fails if it can win before a defender could
+plausibly answer, if it needs fewer than three relays, if the two headquarters
+are not far apart, or if the assault multipliers ever price a headquarters out
+of reach of a full base. It also proves the counterplay: one crossing line cuts
+the chain and takes everything past the cut.
+
 `p2p-host.test.ts` covers the browser-hosted authority: seating, host-only
 start, guests being validated through the same `GameRoom`, malformed and
 unknown messages being ignored, snapshot cadence, reconnect windows and what
@@ -411,6 +420,16 @@ The notable ones:
   transferred — there is no attacker to give them to.
 - **Isolation is evaluated exactly as specified:** after a cut, any victim-owned
   node not reachable from the victim's HQ is captured.
+- **Headquarters spawn on the map's long axis, and storming one is deliberately
+  expensive.** The original tuning (HQs anchored at the top of the spawn
+  ellipse, an HQ assault priced as an ordinary line) made a 2-player match
+  winnable in **5.9 seconds with a single relay** - measured, not guessed. Every
+  other mechanic was decoration. Spawning along the long axis moved the two HQs
+  from 666px to 1248px apart, and the assault limits force a committed chain;
+  the same measurement now reads ~22s and three relays, with the chain fully
+  exposed to a single crossing line. `tests/rush-balance.test.ts` keeps it
+  honest. 3+ player maps stay tighter on purpose - those games are meant to be
+  chaotic.
 - **Intersections are proper crossings only.** Two lines that merely touch at a
   shared endpoint already meet in the graph, so there is nothing to split; a
   small epsilon keeps floating point from inventing junctions at endpoints, and
