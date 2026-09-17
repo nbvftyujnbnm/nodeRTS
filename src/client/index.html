@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>nodeRTS - logistics network RTS</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <canvas id="board" width="1600" height="900"></canvas>
+
+    <!-- HUD shown during a match -->
+    <div id="hud" class="hidden">
+      <div class="panel" id="panel-players">
+        <div class="panel-title">Room <span id="hud-room-code">----</span></div>
+        <ul id="hud-players"></ul>
+      </div>
+      <div class="panel" id="panel-info">
+        <div id="hud-selection">No node selected</div>
+        <div id="hud-build"></div>
+        <div class="controls">
+          <b>Controls</b><br />
+          Click your node to select &middot; click again to build<br />
+          Right-click / Esc cancels<br />
+          Cross your own lines to make junctions<br />
+          Cross enemy lines to cut them<br />
+          Build onto an enemy HQ to eliminate them
+        </div>
+      </div>
+    </div>
+
+    <!-- Event ticker -->
+    <div id="log"></div>
+
+    <!-- Menu / lobby / result overlay -->
+    <div id="overlay">
+      <div class="dialog">
+        <h1>nodeRTS</h1>
+        <p class="tagline">Real-time logistics networks. No units. Cut their lines, take their land.</p>
+
+        <div id="view-menu">
+          <label>Display name
+            <input id="input-name" maxlength="16" placeholder="Commander" autocomplete="off" />
+          </label>
+          <button id="btn-create" class="primary">Create Room</button>
+          <div class="row">
+            <input id="input-code" maxlength="8" placeholder="ROOM CODE" autocomplete="off" />
+            <button id="btn-join">Join Room</button>
+          </div>
+          <p class="hint">2-6 players. Share the room code with your friends.</p>
+        </div>
+
+        <div id="view-lobby" class="hidden">
+          <div class="code-box">
+            <span>Room code</span>
+            <strong id="lobby-code">----</strong>
+            <button id="btn-copy" class="small">Copy</button>
+          </div>
+          <ul id="lobby-players"></ul>
+          <button id="btn-start" class="primary">Start Game</button>
+          <p class="hint" id="lobby-hint">Waiting for the host to start...</p>
+          <button id="btn-leave" class="small ghost">Leave room</button>
+        </div>
+
+        <div id="view-result" class="hidden">
+          <h2 id="result-title">Match over</h2>
+          <p id="result-detail"></p>
+          <button id="btn-again" class="primary">Back to menu</button>
+        </div>
+
+        <p id="overlay-error" class="error"></p>
+      </div>
+    </div>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
