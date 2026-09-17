@@ -17,7 +17,18 @@ import type {
   RoomJoinedPayload,
   TransportMode,
 } from './transport';
-import { render, type PreviewLine, type RenderState } from './render';
+import { nodeRadius, render, type PreviewLine, type RenderState } from './render';
+import {
+  clampCamera,
+  createCamera,
+  isFitted,
+  startingCamera,
+  zoomAt,
+  type Camera,
+  type Point,
+  type Viewport,
+} from './camera';
+import { attachGestures } from './gestures';
 
 // ------------------------------------------------------------------ DOM
 
@@ -58,6 +69,11 @@ const hudRoomCode = $('hud-room-code');
 const hudPlayers = $('hud-players');
 const hudSelection = $('hud-selection');
 const hudBuild = $('hud-build');
+const viewControls = $('view-controls');
+const btnZoomIn = $<HTMLButtonElement>('btn-zoom-in');
+const btnZoomOut = $<HTMLButtonElement>('btn-zoom-out');
+const btnZoomFit = $<HTMLButtonElement>('btn-zoom-fit');
+const btnCancelSel = $<HTMLButtonElement>('btn-cancel-sel');
 const controlsHq = $('controls-hq');
 
 // Written from the constants so the on-screen rules cannot drift from the sim.
@@ -78,6 +94,9 @@ interface ClientState {
   hoverNodeId: string | null;
   mouseWorld: { x: number; y: number } | null;
   status: 'menu' | 'lobby' | 'playing' | 'finished';
+  camera: Camera;
+  view: Viewport;
+  dpr: number;
 }
 
 const state: ClientState = {
@@ -91,6 +110,9 @@ const state: ClientState = {
   hoverNodeId: null,
   mouseWorld: null,
   status: 'menu',
+  camera: { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, scale: 1 },
+  view: { width: WORLD_WIDTH, height: WORLD_HEIGHT },
+  dpr: 1,
 };
 
 const savedName = (() => {
@@ -162,8 +184,9 @@ const handlers: NetHandlers = {
     if (snapshot.status === 'playing') setStatus('playing');
     else if (snapshot.status === 'finished') showResult(snapshot);
     if (state.selectedNodeId && !snapshot.nodes.some((n) => n.id === state.selectedNodeId)) {
-      state.selectedNodeId = null;
+      setSelection(null);
     }
+    if (needsHomeFocus && snapshot.status === 'playing') focusHome();
     renderHud();
   },
   onEvents(events) {
@@ -215,13 +238,18 @@ function setStatus(next: ClientState['status']): void {
   state.status = next;
   overlay.classList.toggle('hidden', next === 'playing');
   hud.classList.toggle('hidden', next !== 'playing');
+  viewControls.classList.toggle('hidden', next !== 'playing');
   viewMenu.classList.toggle('hidden', next !== 'menu');
   viewLobby.classList.toggle('hidden', next !== 'lobby');
   viewResult.classList.toggle('hidden', next !== 'finished');
   if (next === 'menu') {
     state.snapshot = null;
-    state.selectedNodeId = null;
+    setSelection(null);
     state.roomCode = null;
+  }
+  if (next === 'playing') {
+    needsHomeFocus = true;
+    focusHome();
   }
 }
 
@@ -360,23 +388,65 @@ function pushLog(message: string, kind: '' | 'good' | 'attack' = ''): void {
 
 // ------------------------------------------------------------------ input
 
-function toWorld(event: MouseEvent): { x: number; y: number } {
+/**
+ * Size the backing store to the element's real size so the board is crisp on
+ * high-density screens, and keep the camera legal for the new viewport.
+ */
+function resizeCanvas(): void {
   const rect = canvas.getBoundingClientRect();
-  return {
-    x: ((event.clientX - rect.left) / rect.width) * WORLD_WIDTH,
-    y: ((event.clientY - rect.top) / rect.height) * WORLD_HEIGHT,
-  };
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  // Cap the ratio: a 3x backing store on a large phone costs more than it shows.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  state.view = { width, height };
+  state.dpr = dpr;
+  if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+  }
+  setCamera(state.camera);
 }
 
-function nodeAt(point: { x: number; y: number }): NodeSnapshot | null {
+function setCamera(camera: Camera): void {
+  state.camera = clampCamera(camera, state.view);
+  btnZoomOut.disabled = isFitted(state.camera, state.view);
+}
+
+function fitBoard(): void {
+  setCamera(createCamera(state.view));
+}
+
+/** One-shot: frame the player's own HQ when their first real snapshot lands. */
+let needsHomeFocus = true;
+
+function focusHome(): void {
+  const home = state.snapshot?.nodes.find(
+    (n) => n.type === 'hq' && n.ownerId === state.youId,
+  );
+  setCamera(startingCamera(state.view, home ?? null));
+  if (home) needsHomeFocus = false;
+}
+
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => window.setTimeout(resizeCanvas, 150));
+
+/**
+ * Nearest node under a point, using the same radius the renderer drew plus a
+ * finger-sized margin so small nodes stay tappable.
+ */
+function nodeAt(point: Point): NodeSnapshot | null {
   const snapshot = state.snapshot;
   if (!snapshot) return null;
+  const worldPerPixel = 1 / state.camera.scale;
+  const slop = 10 * worldPerPixel;
+
   let best: NodeSnapshot | null = null;
   let bestDist = Infinity;
   for (const node of snapshot.nodes) {
-    const radius = node.type === 'hq' ? 20 : node.type === 'base' ? 14 : 11;
+    const reach = nodeRadius(node.type, worldPerPixel) + slop;
     const d = Math.hypot(node.x - point.x, node.y - point.y);
-    if (d <= radius && d < bestDist) {
+    if (d <= reach && d < bestDist) {
       best = node;
       bestDist = d;
     }
@@ -407,18 +477,18 @@ function contextFromSnapshot(snapshot: Snapshot, youId: string): BuildContext {
 function currentPreview(): PreviewLine | null {
   const snapshot = state.snapshot;
   const youId = state.youId;
-  const mouse = state.mouseWorld;
-  if (!snapshot || !youId || !mouse || !state.selectedNodeId) return null;
+  const aim = state.mouseWorld;
+  if (!snapshot || !youId || !aim || !state.selectedNodeId) return null;
   const source = snapshot.nodes.find((n) => n.id === state.selectedNodeId);
   if (!source) return null;
 
   const evaluation = evaluateBuild(
     contextFromSnapshot(snapshot, youId),
     state.selectedNodeId,
-    mouse.x,
-    mouse.y,
+    aim.x,
+    aim.y,
   );
-  const target = evaluation.target ?? { x: mouse.x, y: mouse.y, kind: 'new' as const, node: null };
+  const target = evaluation.target ?? { x: aim.x, y: aim.y, kind: 'new' as const, node: null };
   const label = evaluation.ok
     ? `${Math.round(evaluation.distance)}px  cost ${Math.round(evaluation.cost)}${
         target.kind === 'enemyHq' ? '  ATTACK HQ' : target.kind === 'snap' ? '  link' : ''
@@ -435,63 +505,80 @@ function currentPreview(): PreviewLine | null {
   };
 }
 
-canvas.addEventListener('mousemove', (event) => {
-  state.mouseWorld = toWorld(event);
-  state.hoverNodeId = nodeAt(state.mouseWorld)?.id ?? null;
-});
+function setSelection(nodeId: string | null): void {
+  state.selectedNodeId = nodeId;
+  btnCancelSel.classList.toggle('hidden', nodeId === null);
+  renderHud();
+}
 
-canvas.addEventListener('mouseleave', () => {
-  state.mouseWorld = null;
-  state.hoverNodeId = null;
-});
+function playable(): boolean {
+  return state.snapshot?.status === 'playing' && state.youId !== null;
+}
 
-canvas.addEventListener('contextmenu', (event) => {
-  event.preventDefault();
-  state.selectedNodeId = null;
-});
+/** A tap with nothing selected picks one of your own nodes. */
+function handleTap(world: Point): void {
+  if (!playable()) return;
+  const clicked = nodeAt(world);
+  if (clicked && clicked.ownerId === state.youId) setSelection(clicked.id);
+}
 
-canvas.addEventListener('mousedown', (event) => {
-  if (event.button !== 0) return;
+/** Releasing an aim commits the build the preview was showing. */
+function handleAimRelease(world: Point): void {
   const snapshot = state.snapshot;
   const youId = state.youId;
-  if (!snapshot || !youId || snapshot.status !== 'playing') return;
-
-  const point = toWorld(event);
-  const clicked = nodeAt(point);
-
-  if (!state.selectedNodeId) {
-    if (clicked && clicked.ownerId === youId) {
-      state.selectedNodeId = clicked.id;
-      renderHud();
-    }
-    return;
-  }
+  if (!playable() || !snapshot || !youId || !state.selectedNodeId) return;
 
   const evaluation = evaluateBuild(
     contextFromSnapshot(snapshot, youId),
     state.selectedNodeId,
-    point.x,
-    point.y,
+    world.x,
+    world.y,
   );
+  const clicked = nodeAt(world);
 
   // Forgiving reselect: an impossible build onto one of your own nodes just
   // moves the selection there instead of nagging.
   if (!evaluation.ok && clicked && clicked.ownerId === youId) {
-    state.selectedNodeId = clicked.id;
-    renderHud();
+    setSelection(clicked.id);
     return;
   }
 
-  net?.buildLine(state.selectedNodeId, point.x, point.y);
-  state.selectedNodeId = null;
-  renderHud();
+  net?.buildLine(state.selectedNodeId, world.x, world.y);
+  setSelection(null);
+  state.mouseWorld = null;
+}
+
+attachGestures(canvas, {
+  getCamera: () => state.camera,
+  setCamera,
+  getView: () => state.view,
+  isAiming: () => state.selectedNodeId !== null && playable(),
+  onTap: handleTap,
+  onAimMove: (world) => {
+    state.mouseWorld = world;
+  },
+  onAimRelease: handleAimRelease,
+  onCancel: () => setSelection(null),
+  onHover: (world) => {
+    state.mouseWorld = world;
+    state.hoverNodeId = world ? nodeAt(world)?.id ?? null : null;
+  },
 });
 
+btnZoomIn.addEventListener('click', () => zoomFromCentre(1.4));
+btnZoomOut.addEventListener('click', () => zoomFromCentre(1 / 1.4));
+btnZoomFit.addEventListener('click', fitBoard);
+btnCancelSel.addEventListener('click', () => setSelection(null));
+
+function zoomFromCentre(factor: number): void {
+  setCamera(
+    zoomAt(state.camera, state.view, { x: state.view.width / 2, y: state.view.height / 2 }, factor),
+  );
+}
+
 window.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    state.selectedNodeId = null;
-    renderHud();
-  }
+  if (event.key === 'Escape') setSelection(null);
+  if (event.key === '0') fitBoard();
 });
 
 // ----------------------------------------------------------- menu actions
@@ -555,6 +642,9 @@ function frame(): void {
   const preview = currentPreview();
 
   const renderState: RenderState = {
+    camera: state.camera,
+    view: state.view,
+    dpr: state.dpr,
     snapshot: state.snapshot,
     snapshotReceivedAt: state.snapshotReceivedAt,
     youId: state.youId,
@@ -576,6 +666,8 @@ function frame(): void {
   requestAnimationFrame(frame);
 }
 
+resizeCanvas();
+fitBoard();
 requestAnimationFrame(frame);
 setStatus('menu');
 

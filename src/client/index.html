@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <title>nodeRTS - logistics network RTS</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./style.css" />
@@ -20,15 +20,25 @@
         <div id="hud-selection">No node selected</div>
         <div id="hud-build"></div>
         <div class="controls">
-          <b>Controls</b><br />
-          Click your node to select &middot; click again to build<br />
-          Right-click / Esc cancels<br />
-          Cross your own lines to make junctions<br />
-          Cross enemy lines to cut them<br />
-          <span id="controls-hq"></span>
+          <div class="key"><b>Tap / click</b> your node, then the destination</div>
+          <div class="key"><b>Drag</b> to aim &middot; <b>drag</b> empty space to pan</div>
+          <div class="extra"><b>Pinch</b> or <b>wheel</b> to zoom &middot; right-click / Esc cancels</div>
+          <div class="extra">Cross your own lines to make junctions</div>
+          <div class="extra">Cross enemy lines to cut them</div>
+          <div class="extra" id="controls-hq"></div>
         </div>
       </div>
     </div>
+
+    <!-- Zoom / fit controls, usable without a wheel or trackpad -->
+    <div id="view-controls" class="hidden">
+      <button id="btn-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+      <button id="btn-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
+      <button id="btn-zoom-fit" type="button" aria-label="Fit whole board" title="Fit whole board">&#9634;</button>
+    </div>
+
+    <!-- Touch has no right click, so cancelling needs a target -->
+    <button id="btn-cancel-sel" class="hidden" type="button">Cancel selection</button>
 
     <!-- Event ticker -->
     <div id="log"></div>

@@ -8,20 +8,25 @@ html, body {
   color: #e7e9ee;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   overflow: hidden;
+  /* Stop mobile browsers hijacking drags as scroll/pull-to-refresh, and stop
+     text selection while panning. */
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-text-size-adjust: 100%;
 }
 
+/* The canvas fills the viewport at any aspect ratio; the camera decides what
+   part of the 1600x900 world is visible. */
 #board {
   position: absolute;
   inset: 0;
-  margin: auto;
-  max-width: 100vw;
-  max-height: 100vh;
   width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  background: #2a2d33;
+  height: 100%;
   display: block;
+  background: #15171b;
   cursor: crosshair;
+  touch-action: none; /* every gesture is handled in JS */
 }
 
 .hidden { display: none !important; }
@@ -64,6 +69,8 @@ html, body {
 #hud-build.valid { color: #6ee36e; }
 #hud-build.invalid { color: #ff6b5e; }
 
+.controls .key + .extra { margin-top: 4px; }
+.controls div { margin-bottom: 2px; }
 .controls {
   margin-top: 10px;
   padding-top: 8px;
@@ -209,3 +216,97 @@ button.ghost { background: none; border-color: #3b414b; color: #8d94a3; }
 .segmented button + button { border-left: 1px solid #3b414b; }
 .segmented button.active { background: #3a6ea5; color: #fff; }
 #mode-hint { margin: 0 0 14px; min-height: 30px; text-align: left; line-height: 1.5; }
+
+
+/* --------------------------------------------------- view controls */
+
+#view-controls {
+  position: absolute;
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 2;
+}
+#view-controls button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  background: rgba(12, 14, 17, 0.85);
+  border-color: #49505d;
+}
+#view-controls button:disabled { opacity: 0.35; cursor: default; }
+
+#btn-cancel-sel {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 2;
+  background: rgba(12, 14, 17, 0.85);
+  padding: 11px 18px;
+}
+
+/* ------------------------------------------------------- responsive */
+
+#hud {
+  padding: calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right))
+    10px calc(10px + env(safe-area-inset-left));
+  gap: 8px;
+}
+.panel { pointer-events: none; }
+#log {
+  left: calc(12px + env(safe-area-inset-left));
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  max-width: calc(100vw - 120px);
+}
+
+/* Tablets and small laptops: trim the panels down. */
+@media (max-width: 900px) {
+  #hud { font-size: 12px; }
+  .panel { min-width: 0; max-width: 42vw; padding: 6px 8px; }
+  .controls { font-size: 10px; }
+  #log { width: 260px; font-size: 11px; }
+  #log div:nth-child(n + 5) { display: none; }
+}
+
+/* Phones: the controls cheat-sheet costs more room than it is worth, and the
+   log has to get out of the way of the thumb controls. */
+@media (max-width: 620px) {
+  #hud { font-size: 11px; padding-top: calc(8px + env(safe-area-inset-top)); }
+  .panel { max-width: 46vw; }
+  /* Keep the two lines a first-time player actually needs; drop the rest. */
+  .controls .extra { display: none; }
+  .controls { margin-top: 6px; padding-top: 6px; }
+  #view-controls { gap: 8px; }
+  #log {
+    width: auto;
+    right: 66px;
+    max-width: none;
+    bottom: calc(66px + env(safe-area-inset-bottom));
+    font-size: 10px;
+  }
+  #log div:nth-child(n + 4) { display: none; }
+  #btn-cancel-sel { bottom: calc(14px + env(safe-area-inset-bottom)); left: 16px; transform: none; }
+  .dialog { padding: 18px 16px; }
+  h1 { font-size: 24px; }
+}
+
+/* Short landscape phones: keep the board as tall as possible. */
+@media (max-height: 480px) {
+  .controls .extra { display: none; }
+  #log { display: none; }
+  .dialog { padding: 14px 16px; max-height: 92vh; overflow-y: auto; }
+  h1 { font-size: 20px; margin-bottom: 2px; }
+  .tagline { margin-bottom: 10px; }
+}
+
+/* Coarse pointers get bigger tap targets everywhere. */
+@media (pointer: coarse) {
+  button { min-height: 44px; }
+  input { min-height: 44px; font-size: 16px; } /* 16px stops iOS zooming on focus */
+  .segmented button { min-height: 44px; }
+}

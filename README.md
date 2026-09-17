@@ -226,13 +226,26 @@ them means rebuilding the client.
 The world is a fixed 1600x900 board. The canvas scales to your browser window
 but world coordinates never change, and there is no camera scrolling.
 
-**Controls**
+**Controls** - the same on a desktop, a tablet and a phone.
 
-| Action | Input |
-| --- | --- |
-| Select one of your nodes | Left click it |
-| Build a supply line | With a node selected, left click the destination |
-| Cancel the selection | Right click, or `Esc` |
+| Action | Mouse | Touch |
+| --- | --- | --- |
+| Select one of your nodes | Left click it | Tap it |
+| Build a supply line | Click the destination, or drag from the node and release | Tap the destination, or drag to aim and release |
+| Pan | Drag empty space, or right-drag | Drag empty space, or two fingers |
+| Zoom | Wheel / trackpad | Pinch |
+| Fit the whole board | The fit button, or `0` | The fit button |
+| Cancel the selection | Right click, or `Esc` | The **Cancel selection** button |
+
+Dragging from a selected node shows the live preview - distance, cost and
+whether it is legal - before you commit, which is the only way to get that
+feedback on a touch screen where there is no hover.
+
+The board is a fixed 1600x900 world; the canvas fills whatever viewport it is
+given and the camera decides what you see. You cannot zoom out past the whole
+board or drag it off screen. A match opens fully fitted on anything at least as
+wide as 16:9, and opens closer in, framed on your own HQ, on a portrait phone
+where a fitted board would be too small to read.
 
 While aiming, the preview line shows the distance, the resource cost and whether
 the build is legal. **Green = valid, red = invalid** (the reason is printed in
@@ -314,6 +327,8 @@ src/
     peerTransport.ts WebRTC plumbing (PeerJS)
   client/
     transport.ts     the one interface the UI talks to
+    camera.ts        zoom/pan maths: fit, clamp, anchored zoom (pure)
+    gestures.ts      one pointer state machine for mouse, touch and pen
     main.ts          glue, input handling, lobby/HUD
     net.ts           socket.io wrapper + reconnect token storage
     render.ts        canvas drawing
@@ -383,6 +398,11 @@ priority, and the required behaviours map to tests as follows:
 | 14. 3-player match continues after an elimination | `match.test.ts` |
 | 15. Last remaining player wins | `match.test.ts` |
 | 16. Reconnection restores control to the correct player | `match.test.ts` |
+
+`camera.test.ts` covers the zoom and pan maths: screen/world round-trips, the
+board never being zoomed out past fitting or dragged off screen, an axis that
+fully fits staying centred, and the world point under the cursor or pinch
+staying put while zooming.
 
 `economy.test.ts` guards against the late-game stall: a 20-node network must
 still be able to fund builds, the HQ must not stay drained, income must scale
