@@ -1,0 +1,17 @@
+# Render Blueprint. Deploy with: New > Blueprint > point at this repo.
+#
+# Rooms live in memory, so this must stay a SINGLE instance. Do not enable
+# autoscaling - a second instance would host a completely separate set of rooms
+# and players sharing a code could land on different ones.
+services:
+  - type: web
+    name: node-rts
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

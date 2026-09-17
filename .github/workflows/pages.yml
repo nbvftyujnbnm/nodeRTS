@@ -1,0 +1,55 @@
+# Publishes ONLY the client to GitHub Pages.
+#
+# GitHub Pages is static hosting: it cannot run the game server. Deploy the
+# server somewhere that runs a Node process (Render, Fly.io, Railway, a VPS),
+# then set these in the repo under Settings > Secrets and variables > Actions:
+#
+#   Variable  SERVER_URL = https://your-server.example.com
+#
+# and add your Pages URL to the server's ALLOWED_ORIGINS, e.g.
+#   ALLOWED_ORIGINS=https://<user>.github.io
+name: Deploy client to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:client
+        env:
+          # Project sites live under /<repo>/, so the bundle needs that base.
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_SERVER_URL: ${{ vars.SERVER_URL }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/client
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

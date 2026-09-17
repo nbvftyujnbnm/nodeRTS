@@ -76,6 +76,91 @@ To use a different port: `docker run --rm -e PORT=3000 -p 3000:3000 node-rts`.
 
 ---
 
+## Publishing it online
+
+**This game needs a always-on Node process holding open WebSocket
+connections.** Rooms live in memory and the server ticks 20 times a second, so
+static hosting (GitHub Pages) and request-scoped serverless functions (Vercel
+Functions, Netlify Functions, Cloudflare Workers) cannot run the *server*.
+
+There are two ways to ship it.
+
+### Option A — everything on one host (simplest)
+
+Deploy the whole repo to anything that runs a long-lived Node process. The
+server serves the built client itself, so there is nothing else to configure
+and no CORS to think about.
+
+| Host | How |
+| --- | --- |
+| **Render** | New > Blueprint, point at this repo. `render.yaml` is included. Free tier sleeps when idle; the first visit after that takes ~30s and any in-progress match is lost. |
+| **Fly.io** | `fly launch --no-deploy --copy-config` then `fly deploy --ha=false`. `fly.toml` and the `Dockerfile` are included. |
+| **Railway / Koyeb / Cloud Run** | Point them at the `Dockerfile`. Cloud Run needs session affinity on and `--min-instances=1`. |
+| **Your own VPS** | `npm ci && npm run build && npm start` behind nginx or Caddy with WebSocket proxying enabled. |
+
+> **Run exactly one instance.** Rooms are in-memory, so a second instance holds
+> a completely separate set of them and two friends using the same code could
+> land on different servers. Don't enable autoscaling.
+
+### Option B — client on GitHub Pages / Vercel, server elsewhere
+
+You can host the *client* on any static host and point it at a server running
+somewhere else. Two settings make this work:
+
+**1. Build the client with the server's URL:**
+
+```bash
+VITE_SERVER_URL=https://your-server.example.com npm run build:client
+```
+
+For a GitHub Pages *project* site (`https://user.github.io/nodeRTS/`) also set
+the sub-path, or every asset 404s:
+
+```bash
+VITE_BASE=/nodeRTS/ VITE_SERVER_URL=https://your-server.example.com npm run build:client
+```
+
+`.github/workflows/pages.yml` does both automatically. Enable Pages with
+"GitHub Actions" as the source and set the repo variable `SERVER_URL`
+(Settings > Secrets and variables > Actions > Variables).
+
+For Vercel: framework **Vite**, build command `npm run build:client`, output
+directory `dist/client`, and add `VITE_SERVER_URL` as an environment variable.
+Leave `VITE_BASE` unset — Vercel serves from the root.
+
+**2. Allow that origin on the server:**
+
+```bash
+ALLOWED_ORIGINS=https://user.github.io,https://my-game.vercel.app npm start
+```
+
+Comma-separated, no trailing slash, scheme included. The origin is checked on
+every transport, not just HTTP polling — a browser will not apply CORS to a
+WebSocket upgrade, so an allowlist enforced only through CORS headers would be
+bypassed by any page that connects over WebSocket directly.
+
+Notes:
+- The origin that the server itself serves the client from is always allowed,
+  so Option A keeps working even with a list set.
+- Requests with no `Origin` header (curl, scripts, the test suite) are allowed.
+  Any such client can spoof the header anyway; the list exists to stop other
+  *websites* from opening rooms on your server, not to authenticate anyone.
+- `ALLOWED_ORIGINS=*` permits everything. Fine for a throwaway game server.
+
+### Environment variables
+
+| Variable | Where | Default | Meaning |
+| --- | --- | --- | --- |
+| `PORT` | server | `8080` | Port to bind. The host usually sets this for you. |
+| `ALLOWED_ORIGINS` | server | unset | Comma-separated origins allowed to connect. Unset = same-origin only. |
+| `VITE_SERVER_URL` | client **build** | unset | Absolute server URL. Unset = same origin. |
+| `VITE_BASE` | client **build** | `/` | Sub-path the client is served from. |
+
+The two `VITE_*` values are baked into the bundle at build time, so changing
+them means rebuilding the client.
+
+---
+
 ## How to play
 
 The world is a fixed 1600x900 board. The canvas scales to your browser window

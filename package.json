@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Minimalist online multiplayer real-time strategy game about logistics networks.",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "tsx watch src/server/index.ts",

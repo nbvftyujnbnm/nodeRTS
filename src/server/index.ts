@@ -18,12 +18,55 @@ import { RoomManager, normalizeCode } from './rooms';
 const PORT = Number.parseInt(process.env.PORT ?? '8080', 10);
 const HOST = '0.0.0.0';
 
+/**
+ * Origins allowed to connect when the client is hosted somewhere else
+ * (GitHub Pages, Vercel, ...). Comma-separated, e.g.
+ *   ALLOWED_ORIGINS=https://me.github.io,https://my-game.vercel.app
+ * Unset means same-origin only, which needs no CORS at all. "*" allows any
+ * origin - convenient for a throwaway game server, but it does mean any page
+ * can open rooms on yours.
+ */
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter((origin) => origin.length > 0);
+
+const ALLOW_ANY_ORIGIN = ALLOWED_ORIGINS.includes('*');
+
+/**
+ * Is this handshake allowed to open a socket?
+ *
+ * Note that the `cors` option below only affects HTTP polling: browsers do not
+ * apply CORS to WebSocket, so an allowlist enforced only through `cors` would
+ * be trivially bypassed by any page connecting over WebSocket directly. This
+ * check runs for every transport, which is what actually enforces the list.
+ *
+ * A missing Origin header means a non-browser client (curl, a test script). It
+ * is allowed: any such client can spoof the header anyway, and the point of the
+ * list is to stop other *websites* from driving your server.
+ */
+function isOriginAllowed(origin: string | undefined, host: string | undefined): boolean {
+  if (ALLOWED_ORIGINS.length === 0 || ALLOW_ANY_ORIGIN) return true;
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Always permit the client this very server is hosting.
+  return host !== undefined && (origin === `http://${host}` || origin === `https://${host}`);
+}
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   serveClient: false,
   pingInterval: 10_000,
   pingTimeout: 8_000,
+  allowRequest: (req, callback) => {
+    const allowed = isOriginAllowed(req.headers.origin, req.headers.host);
+    if (!allowed) log(`rejected connection from origin ${req.headers.origin}`);
+    callback(null, allowed);
+  },
+  ...(ALLOWED_ORIGINS.length > 0
+    ? { cors: { origin: ALLOW_ANY_ORIGIN ? true : ALLOWED_ORIGINS } }
+    : {}),
 });
 
 const rooms = new RoomManager();
@@ -286,6 +329,9 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`  players        ${MIN_PLAYERS}-${MAX_PLAYERS} per room`);
   console.log(
     `  client build   ${hasClientBuild ? clientDist : 'NOT FOUND (run "npm run build:client", or use "npm run dev" for the Vite dev server on :5173)'}`,
+  );
+  console.log(
+    `  cors           ${ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS.join(', ') : 'same-origin only'}`,
   );
   console.log('  ------------------------------------------------------');
   console.log('');

@@ -54,11 +54,22 @@ export function storeSession(session: StoredSession | null): void {
   }
 }
 
+/**
+ * Where the game server lives.
+ *
+ * Empty (the default) means "same origin", which is what happens when the Node
+ * server serves the built client itself. Set VITE_SERVER_URL at build time to
+ * host the client separately (GitHub Pages, Vercel, any static host) and point
+ * it at a server running elsewhere.
+ */
+export const SERVER_URL = (import.meta.env.VITE_SERVER_URL ?? '').trim();
+
 export class Net {
   private readonly socket: Socket;
 
   constructor(private readonly handlers: NetHandlers) {
-    this.socket = io({ transports: ['websocket', 'polling'] });
+    const options = { transports: ['websocket', 'polling'] };
+    this.socket = SERVER_URL ? io(SERVER_URL, options) : io(options);
 
     this.socket.on('connect', () => this.handlers.onConnectionChange(true));
     this.socket.on('disconnect', () => this.handlers.onConnectionChange(false));
