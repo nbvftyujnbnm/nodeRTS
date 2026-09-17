@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import {
   BUILD_REQUEST_MIN_INTERVAL_MS,
   HQ_INITIAL_STOCK,
@@ -20,6 +19,7 @@ import type {
   Snapshot,
 } from '../shared/types';
 import { reachableNodes, sortIds } from './graph';
+import { randomToken } from './random';
 import { completeLine, connectNodes } from './lines';
 import { simulateSupply } from './supply';
 import { evaluateBuild, type BuildContext, type BuildEvaluation } from './validate';
@@ -81,7 +81,7 @@ export class GameRoom {
 
   constructor(options: GameRoomOptions) {
     this.code = options.code;
-    this.tokenFactory = options.tokenFactory ?? (() => randomBytes(16).toString('hex'));
+    this.tokenFactory = options.tokenFactory ?? randomToken;
   }
 
   // ---------------------------------------------------------------- lobby

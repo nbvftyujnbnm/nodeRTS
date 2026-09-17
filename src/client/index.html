@@ -40,6 +40,11 @@
         <p class="tagline">Real-time logistics networks. No units. Cut their lines, take their land.</p>
 
         <div id="view-menu">
+          <div id="mode-picker" class="segmented">
+            <button data-mode="server" type="button">Server</button>
+            <button data-mode="p2p" type="button">Peer-to-peer</button>
+          </div>
+          <p class="hint" id="mode-hint"></p>
           <label>Display name
             <input id="input-name" maxlength="16" placeholder="Commander" autocomplete="off" />
           </label>

@@ -186,3 +186,26 @@ button.ghost { background: none; border-color: #3b414b; color: #8d94a3; }
 #lobby-players .tag { margin-left: auto; font-size: 10px; color: #8d94a3; }
 
 .error { color: #ff6b5e; font-size: 12px; min-height: 16px; margin: 10px 0 0; }
+
+/* ------------------------------------------------------- mode picker */
+
+.segmented {
+  display: flex;
+  gap: 0;
+  margin-bottom: 8px;
+  border: 1px solid #3b414b;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.segmented button {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  background: #11141a;
+  color: #8d94a3;
+  font-size: 12px;
+  padding: 8px 6px;
+}
+.segmented button + button { border-left: 1px solid #3b414b; }
+.segmented button.active { background: #3a6ea5; color: #fff; }
+#mode-hint { margin: 0 0 14px; min-height: 30px; text-align: left; line-height: 1.5; }

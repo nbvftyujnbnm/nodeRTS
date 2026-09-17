@@ -76,16 +76,72 @@ To use a different port: `docker run --rm -e PORT=3000 -p 3000:3000 node-rts`.
 
 ---
 
+## Two ways to play
+
+The menu offers two transports, and the game itself is identical in both.
+
+| | **Peer-to-peer** | **Server** |
+| --- | --- | --- |
+| Who runs the match | The player who created the room, in their browser | A Node server |
+| Hosting cost | None. A static page is enough | Needs an always-on process |
+| Host leaves | Match ends for everyone | Match continues |
+| Cheating | The host *could* tamper with their own authority | Nobody can |
+| Needs | WebRTC (any modern browser) | A reachable server |
+
+In both cases a single authority owns the state and validates every message
+through the same `GameRoom`. Guests in a P2P match are exactly as constrained
+as clients talking to the real server — it is only the *host* who, being the
+authority, is trusted. For a game among friends that is usually fine; for
+strangers, run the server.
+
+---
+
 ## Publishing it online
 
-**This game needs a always-on Node process holding open WebSocket
-connections.** Rooms live in memory and the server ticks 20 times a second, so
-static hosting (GitHub Pages) and request-scoped serverless functions (Vercel
-Functions, Netlify Functions, Cloudflare Workers) cannot run the *server*.
+### Free, no server at all — GitHub Pages + peer-to-peer
 
-There are two ways to ship it.
+This is the cheapest way to get a public URL, and it is what the included
+workflow does by default:
 
-### Option A — everything on one host (simplest)
+1. Push this repo to GitHub.
+2. Settings > Pages > Source: **GitHub Actions**.
+3. Push to `main`. `.github/workflows/pages.yml` builds a P2P client and
+   publishes it.
+
+That is the whole setup. `https://<user>.github.io/<repo>/` is now playable:
+one player clicks **Create Room** and hosts the match in their own browser,
+everyone else joins with the code over WebRTC.
+
+The same build works on Vercel, Netlify, Cloudflare Pages or any static host —
+framework **Vite**, build command `npm run build:client`, output `dist/client`,
+and set `VITE_DEFAULT_MODE=p2p` (plus `VITE_P2P_ONLY=1` to hide the unusable
+server option). Leave `VITE_BASE` unset outside GitHub Pages project sites.
+
+**What you should know before choosing this:**
+
+- **The host must stay.** Their browser *is* the game. If they close the tab
+  the match ends; guests get told and return to the menu after ~4 seconds.
+  There is no host migration.
+- **Keep the host's tab in the foreground.** Browsers throttle timers in
+  background tabs, which slows the simulation for everyone.
+- **Signalling uses the free public PeerJS broker.** No account, but it is a
+  shared best-effort service. Point `VITE_PEER_HOST` at your own broker
+  (`npx peerjs --port 9000`) if you would rather not depend on it. Only the
+  initial handshake goes through it; gameplay is direct between browsers.
+- **A few networks block direct connections.** Most home and mobile networks
+  are fine, but symmetric NAT (some corporate and carrier networks) needs a
+  TURN relay. Set `VITE_ICE_SERVERS` to a JSON array of `RTCIceServer` entries
+  if a player cannot connect. Free TURN is hard to come by; this is the one
+  case where the server option is genuinely easier.
+
+### With a server
+
+**A Node process must stay running** — rooms live in memory and the server
+ticks 20 times a second, so static hosting and request-scoped serverless
+functions (Vercel Functions, Netlify Functions, Cloudflare Workers) cannot run
+the *server* side.
+
+#### Option A — everything on one host (simplest)
 
 Deploy the whole repo to anything that runs a long-lived Node process. The
 server serves the built client itself, so there is nothing else to configure
@@ -102,7 +158,7 @@ and no CORS to think about.
 > a completely separate set of them and two friends using the same code could
 > land on different servers. Don't enable autoscaling.
 
-### Option B — client on GitHub Pages / Vercel, server elsewhere
+#### Option B — client on a static host, server elsewhere
 
 You can host the *client* on any static host and point it at a server running
 somewhere else. Two settings make this work:
@@ -120,9 +176,9 @@ the sub-path, or every asset 404s:
 VITE_BASE=/nodeRTS/ VITE_SERVER_URL=https://your-server.example.com npm run build:client
 ```
 
-`.github/workflows/pages.yml` does both automatically. Enable Pages with
-"GitHub Actions" as the source and set the repo variable `SERVER_URL`
-(Settings > Secrets and variables > Actions > Variables).
+`.github/workflows/pages.yml` does both automatically. Set the repo variable
+`SERVER_URL` (Settings > Secrets and variables > Actions > Variables) and the
+menu gains a **Server** option next to peer-to-peer.
 
 For Vercel: framework **Vite**, build command `npm run build:client`, output
 directory `dist/client`, and add `VITE_SERVER_URL` as an environment variable.
@@ -155,6 +211,10 @@ Notes:
 | `ALLOWED_ORIGINS` | server | unset | Comma-separated origins allowed to connect. Unset = same-origin only. |
 | `VITE_SERVER_URL` | client **build** | unset | Absolute server URL. Unset = same origin. |
 | `VITE_BASE` | client **build** | `/` | Sub-path the client is served from. |
+| `VITE_DEFAULT_MODE` | client **build** | `server` | Which transport the menu starts on: `server` or `p2p`. |
+| `VITE_P2P_ONLY` | client **build** | unset | `1` hides the server option entirely. |
+| `VITE_PEER_HOST` / `_PORT` / `_PATH` / `_SECURE` | client **build** | unset | Your own PeerJS broker. Unset uses the free public one. |
+| `VITE_ICE_SERVERS` | client **build** | unset | JSON array of `RTCIceServer` entries, for adding TURN. |
 
 The two `VITE_*` values are baked into the bundle at build time, so changing
 them means rebuilding the client.
@@ -244,7 +304,12 @@ src/
   server/
     rooms.ts         in-memory room registry + room codes
     index.ts         Express + Socket.IO, tick loop, static file serving
+  p2p/             peer-to-peer mode
+    protocol.ts      guest <-> host message shapes
+    host.ts          HostSession: the authoritative game, in a browser
+    peerTransport.ts WebRTC plumbing (PeerJS)
   client/
+    transport.ts     the one interface the UI talks to
     main.ts          glue, input handling, lobby/HUD
     net.ts           socket.io wrapper + reconnect token storage
     render.ts        canvas drawing
@@ -268,9 +333,12 @@ coordinates are range- and type-checked, node ownership and connectivity are
 re-derived from server state, and build requests are rate-limited.
 
 The client *does* import `evaluateBuild` from `src/game/validate.ts`, but purely
-to colour its preview line green or red. The server runs the same function as
-the authority and will refuse anything illegal regardless of what the client
-thinks.
+to colour its preview line green or red. The authority runs the same function
+and will refuse anything illegal regardless of what the client thinks.
+
+`src/game/` is deliberately free of sockets, DOM and Node built-ins, which is
+what lets the exact same simulation run on the server and inside the host
+player's browser in P2P mode.
 
 Simulation runs at **20 Hz**; snapshots are broadcast at **10 Hz**. Discrete
 events (`constructionStarted`, `supplyLineCut`, `networkCaptured`, `hqCaptured`,
@@ -311,6 +379,11 @@ priority, and the required behaviours map to tests as follows:
 | 14. 3-player match continues after an elimination | `match.test.ts` |
 | 15. Last remaining player wins | `match.test.ts` |
 | 16. Reconnection restores control to the correct player | `match.test.ts` |
+
+`p2p-host.test.ts` covers the browser-hosted authority: seating, host-only
+start, guests being validated through the same `GameRoom`, malformed and
+unknown messages being ignored, snapshot cadence, reconnect windows and what
+happens when the host leaves.
 
 `geometry.test.ts` covers the segment-intersection primitives directly
 (parallel, collinear, shared endpoints, T-touches, would-cross-if-extended), and

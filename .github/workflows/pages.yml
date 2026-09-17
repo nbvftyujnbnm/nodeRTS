@@ -1,13 +1,15 @@
-# Publishes ONLY the client to GitHub Pages.
+# Publishes the client to GitHub Pages.
 #
-# GitHub Pages is static hosting: it cannot run the game server. Deploy the
-# server somewhere that runs a Node process (Render, Fly.io, Railway, a VPS),
-# then set these in the repo under Settings > Secrets and variables > Actions:
+# By default this ships a peer-to-peer build: one player's browser hosts the
+# match over WebRTC, so the game is fully playable from the Pages URL with no
+# server and no hosting cost at all.
 #
-#   Variable  SERVER_URL = https://your-server.example.com
-#
-# and add your Pages URL to the server's ALLOWED_ORIGINS, e.g.
-#   ALLOWED_ORIGINS=https://<user>.github.io
+# Optional repo variables (Settings > Secrets and variables > Actions > Variables):
+#   SERVER_URL   URL of a game server. Setting it adds a "Server" option to the
+#                menu alongside peer-to-peer. Remember to put your Pages origin
+#                in that server's ALLOWED_ORIGINS.
+#   ICE_SERVERS  JSON array of RTCIceServer entries, for a TURN server. Only
+#                needed for players behind a NAT that blocks direct connections.
 name: Deploy client to GitHub Pages
 
 on:
@@ -38,7 +40,12 @@ jobs:
         env:
           # Project sites live under /<repo>/, so the bundle needs that base.
           VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_DEFAULT_MODE: p2p
           VITE_SERVER_URL: ${{ vars.SERVER_URL }}
+          # With no server configured, hide the option instead of offering a
+          # button that cannot work.
+          VITE_P2P_ONLY: ${{ vars.SERVER_URL == '' && '1' || '' }}
+          VITE_ICE_SERVERS: ${{ vars.ICE_SERVERS }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

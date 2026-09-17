@@ -6,7 +6,15 @@ import {
 } from '../shared/config';
 import { evaluateBuild, type BuildContext } from '../game/validate';
 import type { GameEvent, NodeSnapshot, PlayerPublic, Snapshot } from '../shared/types';
-import { Net, loadStoredSession, storeSession, type LobbyPayload, type RoomJoinedPayload } from './net';
+import { Net, loadStoredSession, storeSession } from './net';
+import { PeerTransport } from '../p2p/peerTransport';
+import type {
+  GameTransport,
+  LobbyPayload,
+  NetHandlers,
+  RoomJoinedPayload,
+  TransportMode,
+} from './transport';
 import { render, type PreviewLine, type RenderState } from './render';
 
 // ------------------------------------------------------------------ DOM
@@ -30,6 +38,8 @@ const logBox = $('log');
 const overlayError = $('overlay-error');
 
 const inputName = $<HTMLInputElement>('input-name');
+const modePicker = $('mode-picker');
+const modeHint = $('mode-hint');
 const inputCode = $<HTMLInputElement>('input-code');
 const btnCreate = $<HTMLButtonElement>('btn-create');
 const btnJoin = $<HTMLButtonElement>('btn-join');
@@ -93,11 +103,19 @@ inputName.value = savedName;
  */
 let reconnectPending = false;
 
-const net = new Net({
+/** Transport chosen in the menu; the session is created lazily on join. */
+const P2P_ONLY = import.meta.env.VITE_P2P_ONLY === '1';
+let selectedMode: TransportMode =
+  P2P_ONLY || import.meta.env.VITE_DEFAULT_MODE === 'p2p' ? 'p2p' : 'server';
+let net: GameTransport | null = null;
+
+const handlers: NetHandlers = {
   onConnectionChange(connected) {
     if (connected) {
+      // Only the socket transport silently re-dials; a P2P session already
+      // presented its token when the data channel opened.
       const stored = loadStoredSession();
-      if (stored) {
+      if (stored && net?.mode === 'server' && stored.mode === 'server') {
         reconnectPending = true;
         net.tryReconnect(stored.roomCode, stored.token);
       }
@@ -109,7 +127,11 @@ const net = new Net({
     reconnectPending = false;
     state.youId = payload.playerId;
     state.roomCode = payload.roomCode;
-    storeSession({ roomCode: payload.roomCode, token: payload.reconnectToken });
+    storeSession({
+      roomCode: payload.roomCode,
+      token: payload.reconnectToken,
+      mode: net?.mode ?? selectedMode,
+    });
     overlayError.textContent = '';
     lobbyCode.textContent = payload.roomCode;
     hudRoomCode.textContent = payload.roomCode;
@@ -146,16 +168,37 @@ const net = new Net({
       if (overlayError.textContent === message) overlayError.textContent = '';
     }, 4000);
   },
-  onKicked() {
-    // Only meaningful as the answer to our own reconnect attempt; a late
-    // failure for an old session must not evict us from a room we just joined.
-    if (!reconnectPending) return;
+  onKicked(message, fatal) {
+    // A non-fatal kick is only meaningful as the answer to our own reconnect
+    // attempt; a late failure for an old session must not evict us from a room
+    // we just joined. A fatal one always applies.
+    if (!fatal && !reconnectPending) return;
     reconnectPending = false;
     storeSession(null);
+    net?.dispose();
+    net = null;
     state.youId = null;
     setStatus('menu');
+    overlayError.textContent = message;
   },
-});
+};
+
+function makeTransport(mode: TransportMode): GameTransport {
+  net?.dispose();
+  net = mode === 'p2p' ? new PeerTransport(handlers) : new Net(handlers);
+  return net;
+}
+
+function setMode(mode: TransportMode): void {
+  selectedMode = mode;
+  for (const button of modePicker.querySelectorAll('button')) {
+    button.classList.toggle('active', button.dataset.mode === mode);
+  }
+  modeHint.textContent =
+    mode === 'p2p'
+      ? 'Peer-to-peer: no server needed. The player who creates the room hosts the match, so they must stay connected.'
+      : 'Server: the game server runs the match. Everyone can come and go.';
+}
 
 // ------------------------------------------------------------------ views
 
@@ -431,7 +474,7 @@ canvas.addEventListener('mousedown', (event) => {
     return;
   }
 
-  net.buildLine(state.selectedNodeId, point.x, point.y);
+  net?.buildLine(state.selectedNodeId, point.x, point.y);
   state.selectedNodeId = null;
   renderHud();
 });
@@ -455,19 +498,23 @@ function currentName(): string {
   return name;
 }
 
-btnCreate.addEventListener('click', () => net.createRoom(currentName()));
+btnCreate.addEventListener('click', () => makeTransport(selectedMode).createRoom(currentName()));
 btnJoin.addEventListener('click', () => {
   const code = inputCode.value.trim().toUpperCase();
   if (!code) {
     overlayError.textContent = 'enter a room code';
     return;
   }
-  net.joinRoom(code, currentName());
+  makeTransport(selectedMode).joinRoom(code, currentName());
 });
+
+for (const button of modePicker.querySelectorAll('button')) {
+  button.addEventListener('click', () => setMode(button.dataset.mode === 'p2p' ? 'p2p' : 'server'));
+}
 inputCode.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') btnJoin.click();
 });
-btnStart.addEventListener('click', () => net.startGame());
+btnStart.addEventListener('click', () => net?.startGame());
 btnCopy.addEventListener('click', async () => {
   const code = state.roomCode ?? '';
   try {
@@ -481,7 +528,8 @@ btnCopy.addEventListener('click', async () => {
   }, 1500);
 });
 function returnToMenu(): void {
-  net.leaveRoom();
+  net?.leaveRoom();
+  net = null;
   storeSession(null);
   reconnectPending = false;
   state.youId = null;
@@ -522,3 +570,14 @@ function frame(): void {
 
 requestAnimationFrame(frame);
 setStatus('menu');
+
+if (P2P_ONLY) modePicker.classList.add('hidden');
+setMode(selectedMode);
+
+// Resume an interrupted match if we have a token for one.
+const restored = loadStoredSession();
+if (restored) {
+  setMode(restored.mode);
+  reconnectPending = true;
+  makeTransport(restored.mode).tryReconnect(restored.roomCode, restored.token);
+}

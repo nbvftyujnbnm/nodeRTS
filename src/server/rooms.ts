@@ -1,8 +1,6 @@
-import { ROOM_CODE_LENGTH, ROOM_IDLE_TTL_MS } from '../shared/config';
+import { ROOM_IDLE_TTL_MS } from '../shared/config';
+import { generateRoomCode, normalizeRoomCode } from '../shared/roomCode';
 import { GameRoom } from '../game/room';
-
-/** Unambiguous alphabet: no O/0, I/1, etc. */
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export class RoomManager {
   private readonly rooms = new Map<string, GameRoom>();
@@ -16,7 +14,7 @@ export class RoomManager {
   }
 
   get(code: string): GameRoom | undefined {
-    return this.rooms.get(normalizeCode(code));
+    return this.rooms.get(normalizeRoomCode(code));
   }
 
   delete(code: string): void {
@@ -49,10 +47,7 @@ export class RoomManager {
 
   private generateCode(): string {
     for (let attempt = 0; attempt < 500; attempt++) {
-      let code = '';
-      for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
-        code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
-      }
+      const code = generateRoomCode();
       if (!this.rooms.has(code)) return code;
     }
     // Astronomically unlikely; fall back to a longer code.
@@ -60,7 +55,4 @@ export class RoomManager {
   }
 }
 
-export function normalizeCode(raw: unknown): string {
-  if (typeof raw !== 'string') return '';
-  return raw.trim().toUpperCase().slice(0, 12);
-}
+export { normalizeRoomCode as normalizeCode };

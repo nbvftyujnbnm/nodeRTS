@@ -1,36 +1,21 @@
 import { io, type Socket } from 'socket.io-client';
 import { C2S, S2C } from '../shared/protocol';
-import type { GameEvent, PlayerPublic, RoomStatus, Snapshot } from '../shared/types';
-
-export interface LobbyPayload {
-  roomCode: string;
-  hostId: string | null;
-  status: RoomStatus;
-  players: PlayerPublic[];
-}
-
-export interface RoomJoinedPayload {
-  roomCode: string;
-  playerId: string;
-  reconnectToken: string;
-  status: RoomStatus;
-}
-
-export interface NetHandlers {
-  onRoomJoined(payload: RoomJoinedPayload): void;
-  onLobby(payload: LobbyPayload): void;
-  onSnapshot(snapshot: Snapshot): void;
-  onEvents(events: GameEvent[]): void;
-  onError(message: string): void;
-  onKicked(message: string): void;
-  onConnectionChange(connected: boolean): void;
-}
+import type { GameEvent, Snapshot } from '../shared/types';
+import type {
+  GameTransport,
+  LobbyPayload,
+  NetHandlers,
+  RoomJoinedPayload,
+  TransportMode,
+} from './transport';
 
 const STORAGE_KEY = 'nodeRTS.session';
 
 export interface StoredSession {
   roomCode: string;
   token: string;
+  /** Which transport the session belongs to, so a reload resumes the right one. */
+  mode: 'server' | 'p2p';
 }
 
 export function loadStoredSession(): StoredSession | null {
@@ -38,7 +23,9 @@ export function loadStoredSession(): StoredSession | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredSession;
-    if (typeof parsed?.roomCode === 'string' && typeof parsed?.token === 'string') return parsed;
+    if (typeof parsed?.roomCode === 'string' && typeof parsed?.token === 'string') {
+      return { ...parsed, mode: parsed.mode === 'p2p' ? 'p2p' : 'server' };
+    }
   } catch {
     /* storage can be unavailable; the game still works without reconnect */
   }
@@ -64,7 +51,9 @@ export function storeSession(session: StoredSession | null): void {
  */
 export const SERVER_URL = (import.meta.env.VITE_SERVER_URL ?? '').trim();
 
-export class Net {
+export class Net implements GameTransport {
+  readonly mode: TransportMode = 'server';
+
   private readonly socket: Socket;
 
   constructor(private readonly handlers: NetHandlers) {
@@ -103,5 +92,10 @@ export class Net {
 
   leaveRoom(): void {
     this.socket.emit(C2S.leaveRoom, {});
+  }
+
+  dispose(): void {
+    this.socket.removeAllListeners();
+    this.socket.disconnect();
   }
 }
