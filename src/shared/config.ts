@@ -16,6 +16,17 @@ export const SNAPSHOT_INTERVAL_MS = 1000 / SNAPSHOT_HZ;
 
 // --- Resources ---------------------------------------------------------
 export const HQ_PRODUCTION_PER_SECOND = 24;
+
+/**
+ * Extra production per supplied non-HQ node.
+ *
+ * Without this, territory is worth nothing economically: one node and thirty
+ * nodes both produced 24/s, so there was no engine to break a tie and no
+ * reason to expand rather than turtle. It also makes the core mechanic pay -
+ * cutting an enemy's network does not just take their land, it takes their
+ * income, because only nodes still reachable from their HQ count.
+ */
+export const NODE_PRODUCTION_PER_SECOND = 4;
 export const HQ_MAX_STOCK = 500;
 export const HQ_INITIAL_STOCK = 220;
 

@@ -240,8 +240,10 @@ the panel on the right).
 
 **The rules that matter**
 
-- Only headquarters produce resources (24/second, capped at 500). Everything
-  else has to be fed through your network.
+- Headquarters produce resources, and **supplied territory adds to it**: 24/s
+  at the HQ plus 4/s for every one of your nodes still reachable from it,
+  capped at 500. Expanding pays for itself, and a network that has been cut
+  apart stops producing for the half that is severed.
 - Delivery efficiency drops with route length: a node `d` pixels of *route* away
   costs the HQ `delivered * (1 + 0.0008 * d)`. Sprawling networks are expensive.
 - A node only receives supply if it is actually reachable from your HQ through
@@ -382,6 +384,10 @@ priority, and the required behaviours map to tests as follows:
 | 15. Last remaining player wins | `match.test.ts` |
 | 16. Reconnection restores control to the correct player | `match.test.ts` |
 
+`economy.test.ts` guards against the late-game stall: a 20-node network must
+still be able to fund builds, the HQ must not stay drained, income must scale
+with supplied territory, and territory that has been cut off must stop paying.
+
 `rush-balance.test.ts` plays the degenerate strategy - sprint one chain of
 relays at the enemy HQ - and fails if it can win before a defender could
 plausibly answer, if it needs fewer than three relays, if the two headquarters
@@ -418,6 +424,15 @@ The notable ones:
   satisfies both and stops anyone from running two production centres.
 - **A player eliminated by disconnect timeout has their assets removed**, not
   transferred — there is no attacker to give them to.
+- **Territory produces income, which the original model did not do.** Flat
+  24/s production meant one node and thirty nodes earned exactly the same,
+  while every node pulled towards capacity at once. A 20-node network diluted
+  that income twenty ways: the HQ sat pinned at zero and **not one node could
+  afford even a medium build after 20 seconds** - measured. Both players simply
+  ran out of things they were able to do. Supplied nodes now add 4/s each,
+  which gives the game an engine to break ties and ties the economy to the core
+  mechanic: cutting an enemy network takes their income as well as their
+  ground. `tests/economy.test.ts` guards it.
 - **Isolation is evaluated exactly as specified:** after a cut, any victim-owned
   node not reachable from the victim's HQ is captured.
 - **Headquarters spawn on the map's long axis, and storming one is deliberately

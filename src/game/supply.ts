@@ -2,6 +2,7 @@ import {
   BASE_TRANSFER_RATE,
   HQ_MAX_STOCK,
   HQ_PRODUCTION_PER_SECOND,
+  NODE_PRODUCTION_PER_SECOND,
   TRANSPORT_DISTANCE_PENALTY,
   capacityForNodeType,
 } from '../shared/config';
@@ -46,12 +47,16 @@ export function simulateSupply(
     const hq = findHq(world, player.id);
     if (!hq) continue;
 
-    // 1 + 2: produce and clamp.
-    hq.stock = Math.min(HQ_MAX_STOCK, hq.stock + HQ_PRODUCTION_PER_SECOND * dtSeconds);
-
-    // 3 + 4: only nodes reachable through owned edges are supplied.
+    // 3 + 4 first: only nodes reachable through owned edges are supplied, and
+    // how many there are decides this tick's production.
     const dist = shortestDistances(world, player.id, hq.id);
     distances.set(player.id, dist);
+
+    // 1 + 2: produce and clamp. Supplied territory feeds the HQ, so a network
+    // that has been cut apart produces less.
+    const suppliedNodes = Math.max(0, dist.size - 1); // dist includes the HQ
+    const income = HQ_PRODUCTION_PER_SECOND + suppliedNodes * NODE_PRODUCTION_PER_SECOND;
+    hq.stock = Math.min(HQ_MAX_STOCK, hq.stock + income * dtSeconds);
 
     // 5: gather requests.
     const requests: Request[] = [];
