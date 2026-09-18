@@ -322,11 +322,14 @@ function renderHud(): void {
   }
 
   const selected = snapshot.nodes.find((n) => n.id === state.selectedNodeId);
-  hudSelection.textContent = selected
-    ? `${selected.type.toUpperCase()} - stock ${Math.floor(selected.stock)}/${selected.capacity}${
-        selected.connected ? '' : ' - UNSUPPLIED'
-      }`
-    : 'No node selected';
+  hudSelection.textContent = selected ? describeNode(selected) : 'No node selected';
+}
+
+function describeNode(node: NodeSnapshot): string {
+  const suffix = node.connected ? '' : ' - UNSUPPLIED';
+  // Junctions are wiring: no storage to report.
+  if (node.capacity <= 0) return `JUNCTION - relay only, no storage${suffix}`;
+  return `${node.type.toUpperCase()} - stock ${Math.floor(node.stock)}/${node.capacity}${suffix}`;
 }
 
 // ------------------------------------------------------------ event ticker

@@ -189,7 +189,9 @@ function drawNode(
     ctx.stroke();
   }
 
-  // stock readout: a short bar plus the number
+  // Stock readout: a short bar plus the number. Junctions store nothing, so
+  // they get no gauge - an empty bar under every crossing is just noise.
+  if (node.capacity <= 0) return;
   const barWidth = (node.type === 'hq' ? 44 : 26) * k;
   const barHeight = 4 * k;
   const fill = node.capacity > 0 ? clamp01(node.stock / node.capacity) : 0;

@@ -254,7 +254,7 @@ the panel on the right).
 **The rules that matter**
 
 - Headquarters produce resources, and **supplied territory adds to it**: 24/s
-  at the HQ plus 4/s for every one of your nodes still reachable from it,
+  at the HQ plus 4/s for every one of your **bases** still reachable from it,
   capped at 500. Expanding pays for itself, and a network that has been cut
   apart stops producing for the half that is severed.
 - Delivery efficiency drops with route length: a node `d` pixels of *route* away
@@ -272,9 +272,10 @@ the panel on the right).
 **Crossing lines is the whole game**
 
 - **Crossing your own line** creates a junction at the intersection and splits
-  both lines through it. Arbitrary crossing lines therefore fuse into one
-  connected logistics graph, and junctions can store resources and serve as
-  build sources.
+  both lines through it, so arbitrary crossing lines fuse into one connected
+  logistics graph. Junctions are **wiring, not territory**: they route supply
+  and they are worth cutting, but they hold nothing, produce nothing and
+  cannot start a line. Build from a base or your HQ.
 - **Crossing an enemy line cuts it.** The severed edge is gone. The server then
   recomputes, from the victim's HQ, what they can still reach. **Everything they
   can no longer reach is captured by you instantly**, stocks reset to zero, and
@@ -399,6 +400,11 @@ priority, and the required behaviours map to tests as follows:
 | 15. Last remaining player wins | `match.test.ts` |
 | 16. Reconnection restores control to the correct player | `match.test.ts` |
 
+`junctions.test.ts` pins the inert-junction rules: zero capacity, no stock
+however long they are supplied, no income however many a single build mints,
+a refusal with a reason when one is used as a build source, and - the part
+that must keep working - supply still flowing through them to what lies beyond.
+
 `camera.test.ts` covers the zoom and pan maths: screen/world round-trips, the
 board never being zoomed out past fitting or dragged off screen, an axis that
 fully fits staying centred, and the world point under the cursor or pinch
@@ -453,6 +459,14 @@ The notable ones:
   which gives the game an engine to break ties and ties the economy to the core
   mechanic: cutting an enemy network takes their income as well as their
   ground. `tests/economy.test.ts` guards it.
+- **Junctions are inert, which is a deliberate break from the original spec.**
+  The spec had them store resources and act as build sources, i.e. bases that
+  happen to appear for free wherever two of your lines cross. Once supplied
+  nodes started paying income, that turned one build across a fan of your own
+  lines into several new earners at once. They now hold nothing and earn
+  nothing, so crossings are about routing and redundancy and every base on the
+  map is one a player paid for and placed. They still conduct, and cutting one
+  still severs the network through it.
 - **Isolation is evaluated exactly as specified:** after a cut, any victim-owned
   node not reachable from the victim's HQ is captured.
 - **Headquarters spawn on the map's long axis, and storming one is deliberately

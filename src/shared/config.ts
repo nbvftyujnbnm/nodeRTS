@@ -18,20 +18,37 @@ export const SNAPSHOT_INTERVAL_MS = 1000 / SNAPSHOT_HZ;
 export const HQ_PRODUCTION_PER_SECOND = 24;
 
 /**
- * Extra production per supplied non-HQ node.
+ * Extra production per supplied base.
  *
  * Without this, territory is worth nothing economically: one node and thirty
  * nodes both produced 24/s, so there was no engine to break a tie and no
  * reason to expand rather than turtle. It also makes the core mechanic pay -
  * cutting an enemy's network does not just take their land, it takes their
- * income, because only nodes still reachable from their HQ count.
+ * income, because only bases still reachable from their HQ count.
  */
 export const NODE_PRODUCTION_PER_SECOND = 4;
+
+/** Node types that add to their owner's production. Junctions deliberately do not. */
+export function producesIncome(type: 'hq' | 'base' | 'junction'): boolean {
+  return type === 'base';
+}
 export const HQ_MAX_STOCK = 500;
 export const HQ_INITIAL_STOCK = 220;
 
 export const BASE_MAX_STOCK = 110;
-export const JUNCTION_MAX_STOCK = 70;
+
+/**
+ * Junctions are wiring, not territory: they route supply and they are the
+ * things worth cutting, but they hold nothing, produce nothing, and cannot
+ * start a line.
+ *
+ * They appear for free wherever two of your own lines happen to cross, so
+ * giving them a base's economy meant one build across a fan of your own lines
+ * minted several income sources at once. Keeping them inert leaves crossings
+ * about what they should be about - routing and redundancy - and makes every
+ * base on the map something a player deliberately paid for and placed.
+ */
+export const JUNCTION_MAX_STOCK = 0;
 
 export const BASE_TRANSFER_RATE = 12; // per second, per receiving node
 

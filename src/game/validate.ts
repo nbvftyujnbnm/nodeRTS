@@ -66,6 +66,9 @@ export function evaluateBuild(
   const source = ctx.getNode(fromNodeId);
   if (!source) return fail('source node does not exist');
   if (source.ownerId !== ctx.playerId) return fail('source node is not yours');
+  // Junctions are wiring: they carry supply past a crossing but store none of
+  // it, so there is nothing there to pay for a line.
+  if (source.type === 'junction') return fail('junctions only relay - build from a base or HQ');
   if (!ctx.isConnectedToHq(source.id)) return fail('source is not supplied by your HQ');
 
   if (ctx.activeConstructionsForPlayer >= MAX_ACTIVE_CONSTRUCTIONS_PER_PLAYER) {

@@ -5,6 +5,7 @@ import {
   NODE_PRODUCTION_PER_SECOND,
   TRANSPORT_DISTANCE_PENALTY,
   capacityForNodeType,
+  producesIncome,
 } from '../shared/config';
 import type { GameNode } from '../shared/types';
 import { shortestDistances } from './graph';
@@ -29,10 +30,12 @@ interface Request {
 /**
  * One tick of the resource model.
  *
- * Only HQs produce. Everything else pulls towards its capacity through the
- * live supply graph, and long routes cost the HQ more than they deliver. When
- * the HQ cannot pay for everything requested this tick, every delivery is
- * scaled by the same factor, so no node is privileged by iteration order.
+ * Production happens at the HQ and scales with how many supplied bases its
+ * owner still holds. Bases pull towards their capacity through the live supply
+ * graph, and long routes cost the HQ more than they deliver. Junctions hold
+ * nothing and produce nothing; they only conduct. When the HQ cannot pay for
+ * everything requested this tick, every delivery is scaled by the same factor,
+ * so no node is privileged by iteration order.
  */
 export function simulateSupply(
   world: World,
@@ -53,9 +56,14 @@ export function simulateSupply(
     distances.set(player.id, dist);
 
     // 1 + 2: produce and clamp. Supplied territory feeds the HQ, so a network
-    // that has been cut apart produces less.
-    const suppliedNodes = Math.max(0, dist.size - 1); // dist includes the HQ
-    const income = HQ_PRODUCTION_PER_SECOND + suppliedNodes * NODE_PRODUCTION_PER_SECOND;
+    // that has been cut apart produces less. Only bases count - junctions are
+    // wiring that appears for free wherever lines cross.
+    let producers = 0;
+    for (const nodeId of dist.keys()) {
+      const node = world.nodes.get(nodeId);
+      if (node && node.id !== hq.id && producesIncome(node.type)) producers++;
+    }
+    const income = HQ_PRODUCTION_PER_SECOND + producers * NODE_PRODUCTION_PER_SECOND;
     hq.stock = Math.min(HQ_MAX_STOCK, hq.stock + income * dtSeconds);
 
     // 5: gather requests.
