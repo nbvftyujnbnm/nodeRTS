@@ -1,6 +1,7 @@
 import { GameRoom } from '../src/game/room';
 import { addEdge, addNode, createWorld, type World } from '../src/game/world';
 import type { GameNode } from '../src/shared/types';
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/shared/config';
 
 export interface Scenario {
   world: World;
@@ -40,7 +41,11 @@ export function ownedNodes(world: World, ownerId: string): GameNode[] {
 /** A started room with `count` players and deterministic reconnect tokens. */
 export function startedRoom(count: number, now = 1_000): { room: GameRoom; ids: string[] } {
   let tokenCounter = 0;
-  const room = new GameRoom({ code: 'TEST', tokenFactory: () => `token-${++tokenCounter}` });
+  const room = new GameRoom({
+    code: 'TEST',
+    tokenFactory: () => `token-${++tokenCounter}`,
+    random: () => 0, // pin the seat draw so positions are stable across runs
+  });
   const ids: string[] = [];
   for (let i = 0; i < count; i++) {
     const player = room.addPlayer(`P${i + 1}`, `socket-${i + 1}`, now);
@@ -69,4 +74,32 @@ export function finishBuild(room: GameRoom, startedAt: number, buildTimeSeconds:
   room.tick(finish - 1);
   room.tick(finish + 1);
   return finish + 1;
+}
+
+/**
+ * A point `distance` away from `from`, aimed at the middle of the map.
+ *
+ * Spawns sit near the edge, so any test that builds in a fixed compass
+ * direction will sooner or later aim out of the world and fail for the wrong
+ * reason. Aiming inwards is always legal.
+ */
+export function towardCentre(
+  from: { x: number; y: number },
+  distance: number,
+): { x: number; y: number } {
+  const dx = WORLD_WIDTH / 2 - from.x;
+  const dy = WORLD_HEIGHT / 2 - from.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: from.x + (dx / len) * distance, y: from.y + (dy / len) * distance };
+}
+
+/** Sideways from the line to the map centre, which also stays in bounds. */
+export function besideCentreLine(
+  from: { x: number; y: number },
+  distance: number,
+): { x: number; y: number } {
+  const dx = WORLD_WIDTH / 2 - from.x;
+  const dy = WORLD_HEIGHT / 2 - from.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: from.x + (-dy / len) * distance, y: from.y + (dx / len) * distance };
 }

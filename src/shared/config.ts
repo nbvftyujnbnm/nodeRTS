@@ -97,6 +97,9 @@ export const JUNCTION_MERGE_EPS = 1.5;
 export const MIN_EDGE_LENGTH = 0.5;
 
 // --- Room / lobby ------------------------------------------------------
+/** Keep spawned headquarters this far from the world edge, in world pixels. */
+export const SPAWN_MARGIN = 80;
+
 export const MAX_PLAYERS = 6;
 export const MIN_PLAYERS = 2;
 export const ROOM_CODE_LENGTH = 4;

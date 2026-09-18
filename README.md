@@ -271,11 +271,12 @@ the panel on the right).
 
 **Crossing lines is the whole game**
 
-- **Crossing your own line** creates a junction at the intersection and splits
-  both lines through it, so arbitrary crossing lines fuse into one connected
-  logistics graph. Junctions are **wiring, not territory**: they route supply
-  and they are worth cutting, but they hold nothing, produce nothing and
-  cannot start a line. Build from a base or your HQ.
+- **Crossing your own line** joins the two lines together, so arbitrary
+  crossing lines fuse into one connected logistics graph. On screen it is just
+  two lines crossing: the graph keeps a junction node there, but it is not
+  drawn, cannot be clicked and is never snapped onto, because it is **wiring,
+  not territory** - it holds nothing, produces nothing and cannot start a line.
+  Build from a base or your HQ.
 - **Crossing an enemy line cuts it.** The severed edge is gone. The server then
   recomputes, from the victim's HQ, what they can still reach. **Everything they
   can no longer reach is captured by you instantly**, stocks reset to zero, and
@@ -400,10 +401,16 @@ priority, and the required behaviours map to tests as follows:
 | 15. Last remaining player wins | `match.test.ts` |
 | 16. Reconnection restores control to the correct player | `match.test.ts` |
 
+`spawn.test.ts` checks the seat layout: every polygon edge the same length,
+every vertex inside the margin, the polygon grown until a vertex touches that
+margin, 2 players spread across the long axis, and a draw that varies between
+matches without losing or duplicating a seat.
+
 `junctions.test.ts` pins the inert-junction rules: zero capacity, no stock
 however long they are supplied, no income however many a single build mints,
-a refusal with a reason when one is used as a build source, and - the part
-that must keep working - supply still flowing through them to what lies beyond.
+a refusal with a reason when one is used as a build source, never being snapped
+onto while aiming, and - the part that must keep working - supply still flowing
+through them to what lies beyond.
 
 `camera.test.ts` covers the zoom and pan maths: screen/world round-trips, the
 board never being zoomed out past fitting or dragged off screen, an axis that
@@ -459,17 +466,26 @@ The notable ones:
   which gives the game an engine to break ties and ties the economy to the core
   mechanic: cutting an enemy network takes their income as well as their
   ground. `tests/economy.test.ts` guards it.
-- **Junctions are inert, which is a deliberate break from the original spec.**
-  The spec had them store resources and act as build sources, i.e. bases that
-  happen to appear for free wherever two of your lines cross. Once supplied
-  nodes started paying income, that turned one build across a fan of your own
-  lines into several new earners at once. They now hold nothing and earn
-  nothing, so crossings are about routing and redundancy and every base on the
-  map is one a player paid for and placed. They still conduct, and cutting one
+- **Junctions are invisible and inert, a deliberate break from the original
+  spec.** The spec had them store resources and act as build sources, i.e.
+  bases that appear for free wherever two of your lines cross. Once supplied
+  nodes started paying income, one build across a fan of your own lines minted
+  several earners at once. They now hold nothing, earn nothing, cannot start a
+  line, are not drawn and are not clickable or snappable - a crossing looks and
+  behaves like two lines crossing. The split halves are collinear with the
+  originals, so nothing is lost visually. They still conduct, and cutting one
   still severs the network through it.
+- **Spawns are the vertices of a regular polygon, drawn at random.** The
+  ellipse they replaced was not regular: a 3-player match put two players 576
+  apart and the third 979 from both, so the opening was decided by which seat
+  you got. All pairs are now equidistant (740 for 3 players). The polygon is
+  grown to the largest the map allows rather than a fixed fraction of it, so
+  2 players end up 1440 apart across the full width instead of 1248. Because
+  every vertex of a regular polygon is equivalent, the draw changes where your
+  colour sits, not how good the position is.
 - **Isolation is evaluated exactly as specified:** after a cut, any victim-owned
   node not reachable from the victim's HQ is captured.
-- **Headquarters spawn on the map's long axis, and storming one is deliberately
+- **Headquarters spawn far apart, and storming one is deliberately
   expensive.** The original tuning (HQs anchored at the top of the spawn
   ellipse, an HQ assault priced as an ordinary line) made a 2-player match
   winnable in **5.9 seconds with a single relay** - measured, not guessed. Every

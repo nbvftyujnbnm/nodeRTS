@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { completeLine } from '../src/game/lines';
+import { resolveBuildTarget } from '../src/game/target';
 import { simulateSupply } from '../src/game/supply';
 import { shortestDistances } from '../src/game/graph';
 import { addEdge, addNode, createWorld, findHq, type World } from '../src/game/world';
@@ -9,7 +10,7 @@ import {
   NODE_PRODUCTION_PER_SECOND,
   capacityForNodeType,
 } from '../src/shared/config';
-import { hqNode, startedRoom } from './helpers';
+import { hqNode, startedRoom, towardCentre } from './helpers';
 
 const ALIVE = new Set(['p1']);
 
@@ -123,10 +124,12 @@ describe('junctions are wiring, not territory', () => {
   it('cannot start a line, with a reason that says why', () => {
     const { room, ids } = startedRoom(2);
     const hq = hqNode(room, ids[0]);
-    const junction = addNode(room.world, ids[0], 'junction', hq.x - 120, hq.y, 0);
+    const spot = towardCentre(hq, 120);
+    const junction = addNode(room.world, ids[0], 'junction', spot.x, spot.y, 0);
     addEdge(room.world, ids[0], hq.id, junction.id);
 
-    const result = room.requestBuild(ids[0], junction.id, junction.x - 150, junction.y, 2_000);
+    const aim = towardCentre(junction, 150);
+    const result = room.requestBuild(ids[0], junction.id, aim.x, aim.y, 2_000);
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('junctions only relay - build from a base or HQ');
   });
@@ -134,11 +137,36 @@ describe('junctions are wiring, not territory', () => {
   it('still lets a base right next to a junction build normally', () => {
     const { room, ids } = startedRoom(2);
     const hq = hqNode(room, ids[0]);
-    const junction = addNode(room.world, ids[0], 'junction', hq.x - 120, hq.y, 0);
+    const spot = towardCentre(hq, 120);
+    const junction = addNode(room.world, ids[0], 'junction', spot.x, spot.y, 0);
     addEdge(room.world, ids[0], hq.id, junction.id);
 
-    const result = room.requestBuild(ids[0], hq.id, hq.x - 200, hq.y - 100, 2_000);
+    const aim = towardCentre(hq, 224);
+    const result = room.requestBuild(ids[0], hq.id, aim.x, aim.y, 2_000);
     expect(result.ok).toBe(true);
     void junction;
+  });
+});
+
+describe('junctions are invisible to aiming', () => {
+  it('are never snapped onto as a build target', () => {
+    const world = createWorld();
+    const hq = addNode(world, 'p1', 'hq', 200, 450, 500);
+    const junction = addNode(world, 'p1', 'junction', 600, 450, 0);
+    const base = addNode(world, 'p1', 'base', 1000, 450, 0);
+
+    // Aim a few pixels from the junction: it must not pull the line in.
+    const nearJunction = resolveBuildTarget(
+      world.nodes.values(), 'p1', hq.id, junction.x + 4, junction.y + 4, ALIVE,
+    );
+    expect(nearJunction.kind).toBe('new');
+    expect(nearJunction.node).toBeNull();
+
+    // A base at the same offset still snaps, so the rule is specific.
+    const nearBase = resolveBuildTarget(
+      world.nodes.values(), 'p1', hq.id, base.x + 4, base.y + 4, ALIVE,
+    );
+    expect(nearBase.kind).toBe('snap');
+    expect(nearBase.node?.id).toBe(base.id);
   });
 });

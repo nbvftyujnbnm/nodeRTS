@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { HostSession, parseGuestMessage, type HostClient } from '../src/p2p/host';
 import type { HostToGuest } from '../src/p2p/protocol';
 import { RECONNECT_GRACE_MS, TICK_INTERVAL_MS } from '../src/shared/config';
+import { towardCentre } from './helpers';
 
 /** A fake data channel that just records what the host sent. */
 function fakeClient(id: string) {
@@ -22,7 +23,7 @@ function fakeClient(id: string) {
 }
 
 function lobbyOf(code = 'TEST') {
-  const session = new HostSession(code);
+  const session = new HostSession(code, { random: () => 0 });
   const host = fakeClient('local');
   const guest = fakeClient('peer-1');
   session.addClient(host.client);
@@ -69,9 +70,11 @@ describe('P2P host session', () => {
     session.receive('local', { t: 'start' }, 2_000);
 
     const enemyHq = [...session.room.world.nodes.values()].find((n) => n.ownerId === 'p1')!;
-    // A guest trying to build from a node they do not own.
+    // A guest trying to build from a node they do not own. Aim inwards so the
+    // refusal is about ownership rather than the target leaving the world.
+    const inward = towardCentre(enemyHq, 100);
     session.receive('peer-1', {
-      t: 'build', fromNodeId: enemyHq.id, targetX: enemyHq.x + 100, targetY: enemyHq.y,
+      t: 'build', fromNodeId: enemyHq.id, targetX: inward.x, targetY: inward.y,
     }, 2_500);
     expect(guest.last('err')?.message).toBe('source node is not yours');
 
@@ -83,8 +86,9 @@ describe('P2P host session', () => {
 
     // A legal build from their own HQ.
     const ownHq = [...session.room.world.nodes.values()].find((n) => n.ownerId === 'p2')!;
+    const aim = towardCentre(ownHq, 150);
     session.receive('peer-1', {
-      t: 'build', fromNodeId: ownHq.id, targetX: ownHq.x, targetY: ownHq.y - 150,
+      t: 'build', fromNodeId: ownHq.id, targetX: aim.x, targetY: aim.y,
     }, 3_500);
     expect(session.room.constructions.size).toBe(1);
   });
@@ -153,8 +157,9 @@ describe('P2P host session', () => {
 
     // And they can act again.
     const ownHq = [...session.room.world.nodes.values()].find((n) => n.ownerId === 'p2')!;
+    const aim = towardCentre(ownHq, 150);
     session.receive('peer-1b', {
-      t: 'build', fromNodeId: ownHq.id, targetX: ownHq.x, targetY: ownHq.y - 150,
+      t: 'build', fromNodeId: ownHq.id, targetX: aim.x, targetY: aim.y,
     }, 3_500);
     expect(session.room.constructions.size).toBe(1);
   });

@@ -31,8 +31,8 @@ export class HostSession {
   private readonly clientByPlayer = new Map<string, string>();
   private sinceSnapshot = 0;
 
-  constructor(code: string) {
-    this.room = new GameRoom({ code });
+  constructor(code: string, options: { random?: () => number } = {}) {
+    this.room = new GameRoom({ code, random: options.random });
   }
 
   addClient(client: HostClient): void {

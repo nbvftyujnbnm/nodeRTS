@@ -13,7 +13,7 @@ import {
   buildCostForDistance,
   buildTimeForDistance,
 } from '../src/shared/config';
-import { finishBuild, hqNode, startedRoom } from './helpers';
+import { besideCentreLine, finishBuild, hqNode, startedRoom, towardCentre } from './helpers';
 
 /** Requirement 11: range, ownership, connectivity and resource validation. */
 describe('build validation', () => {
@@ -62,7 +62,8 @@ describe('build validation', () => {
   it('rejects building from a node you do not own', () => {
     const { room, ids } = startedRoom(2);
     const enemyHq = hqNode(room, ids[1]);
-    const result = room.requestBuild(ids[0], enemyHq.id, enemyHq.x + 100, enemyHq.y, 2_000);
+    const aim = towardCentre(enemyHq, 100);
+    const result = room.requestBuild(ids[0], enemyHq.id, aim.x, aim.y, 2_000);
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('source node is not yours');
   });
@@ -106,10 +107,12 @@ describe('build validation', () => {
     const hq = hqNode(room, ids[0]);
     hq.stock = 500;
     let now = 2_000;
-    expect(room.requestBuild(ids[0], hq.id, hq.x + 100, hq.y + 100, now).ok).toBe(true);
+    const first = towardCentre(hq, 140);
+    expect(room.requestBuild(ids[0], hq.id, first.x, first.y, now).ok).toBe(true);
 
     now += BUILD_REQUEST_MIN_INTERVAL_MS + 1;
-    const second = room.requestBuild(ids[0], hq.id, hq.x - 100, hq.y + 100, now);
+    const again = towardCentre(hq, 220);
+    const second = room.requestBuild(ids[0], hq.id, again.x, again.y, now);
     expect(second.ok).toBe(false);
     expect(second.reason).toBe('this node is already building');
 
@@ -200,8 +203,10 @@ describe('headquarters capture', () => {
     );
     addEdge(room.world, attacker, attackerHq.id, forward.id);
 
-    // Give the victim something to inherit.
-    const victimBase = addNode(room.world, victim, 'base', victimHq.x + 120, victimHq.y, 55);
+    // Give the victim something to inherit, off to one side so it does not sit
+    // on the attacker's approach line.
+    const aside = besideCentreLine(victimHq, 120);
+    const victimBase = addNode(room.world, victim, 'base', aside.x, aside.y, 55);
     addEdge(room.world, victim, victimHq.id, victimBase.id);
 
     return { room, ids, attacker, victim, victimHq, forward, victimBase };
@@ -257,7 +262,8 @@ describe('headquarters capture', () => {
 
   it('cancels constructions belonging to the eliminated player', () => {
     const { room, victim, victimHq, attacker, forward, victimBase } = stageAttack(3);
-    const victimBuild = room.requestBuild(victim, victimBase.id, victimBase.x, victimBase.y - 150, 1_500);
+    const victimAim = towardCentre(victimBase, 150);
+    const victimBuild = room.requestBuild(victim, victimBase.id, victimAim.x, victimAim.y, 1_500);
     expect(victimBuild.ok).toBe(true);
 
     runAttack(room, attacker, forward.id, victimHq.x, victimHq.y);
@@ -355,7 +361,8 @@ describe('reconnection', () => {
 
     // And that player can act again.
     const hq = hqNode(room, ids[1]);
-    expect(room.requestBuild(ids[1], hq.id, hq.x + 120, hq.y - 60, 11_000).ok).toBe(true);
+    const aim = towardCentre(hq, 134);
+    expect(room.requestBuild(ids[1], hq.id, aim.x, aim.y, 11_000).ok).toBe(true);
   });
 
   it('rejects an unknown or stale token', () => {

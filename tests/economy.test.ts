@@ -15,15 +15,18 @@ import {
  * inside the world and at a distinct position.
  */
 function networkOf(nodesPerChain: number) {
-  const room = new GameRoom({ code: 'ECON' });
+  const room = new GameRoom({ code: 'ECON', random: () => 0 });
   const me = room.addPlayer('A', 's1', 0);
   room.addPlayer('B', 's2', 0);
   if ('error' in me) throw new Error(me.error);
   room.start(0);
   const hq = findHq(room.world, me.id)!;
 
-  for (const degrees of [165, 175, 185, 195]) {
-    const angle = (degrees * Math.PI) / 180;
+  // Fan inwards from wherever the seat draw put the HQ, so every node lands
+  // inside the world.
+  const inward = Math.atan2(450 - hq.y, 800 - hq.x);
+  for (const offset of [-15, -5, 5, 15]) {
+    const angle = inward + (offset * Math.PI) / 180;
     let previous = hq;
     for (let i = 1; i <= nodesPerChain; i++) {
       const node = addNode(

@@ -19,6 +19,7 @@ import type {
   Snapshot,
 } from '../shared/types';
 import { reachableNodes, sortIds } from './graph';
+import { drawSpawnPoints } from './spawn';
 import { randomToken } from './random';
 import { completeLine, connectNodes } from './lines';
 import { simulateSupply } from './supply';
@@ -41,6 +42,8 @@ export interface GameRoomOptions {
   code: string;
   /** Injectable so tests get stable tokens. */
   tokenFactory?: () => string;
+  /** Injectable so tests get a stable spawn draw. */
+  random?: () => number;
 }
 
 export interface BuildRequestResult {
@@ -76,12 +79,14 @@ export class GameRoom {
   private constructionCounter = 0;
   private lastTickAt = 0;
   private readonly tokenFactory: () => string;
+  private readonly random: () => number;
 
   lastActivityAt = 0;
 
   constructor(options: GameRoomOptions) {
     this.code = options.code;
     this.tokenFactory = options.tokenFactory ?? randomToken;
+    this.random = options.random ?? Math.random;
   }
 
   // ---------------------------------------------------------------- lobby
@@ -177,20 +182,10 @@ export class GameRoom {
     if (!check.ok) return check;
 
     const ids = [...this.players.keys()];
-    const count = ids.length;
-    const cx = WORLD_WIDTH / 2;
-    const cy = WORLD_HEIGHT / 2;
-    const rx = WORLD_WIDTH * 0.39;
-    const ry = WORLD_HEIGHT * 0.37;
-
-    // Start on the long axis. Anchoring at -90 degrees put a 2-player match on
-    // the map's short side, leaving the HQs only ~666px apart - two builds and
-    // the game was over before anyone could react.
+    const seats = drawSpawnPoints(ids.length, this.random);
     ids.forEach((id, index) => {
-      const angle = (index * 2 * Math.PI) / count;
-      const x = Math.round(cx + rx * Math.cos(angle));
-      const y = Math.round(cy + ry * Math.sin(angle));
-      addNode(this.world, id, 'hq', x, y, HQ_INITIAL_STOCK);
+      const seat = seats[index];
+      addNode(this.world, id, 'hq', seat.x, seat.y, HQ_INITIAL_STOCK);
     });
 
     this.status = 'playing';

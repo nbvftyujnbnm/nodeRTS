@@ -53,7 +53,14 @@ export function resolveBuildTarget(
         bestHqDist = d;
       }
     }
-    if (node.ownerId === ownerId && node.id !== sourceNodeId && d <= NODE_SNAP_RADIUS) {
+    // Junctions are invisible plumbing, so they are not snap targets either -
+    // a line must never land somewhere the player cannot see.
+    if (
+      node.ownerId === ownerId &&
+      node.type !== 'junction' &&
+      node.id !== sourceNodeId &&
+      d <= NODE_SNAP_RADIUS
+    ) {
       if (d < bestOwnDist || (d === bestOwnDist && isLowerId(node.id, bestOwn?.id))) {
         bestOwn = node;
         bestOwnDist = d;

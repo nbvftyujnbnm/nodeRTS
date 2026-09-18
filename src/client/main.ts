@@ -327,8 +327,6 @@ function renderHud(): void {
 
 function describeNode(node: NodeSnapshot): string {
   const suffix = node.connected ? '' : ' - UNSUPPLIED';
-  // Junctions are wiring: no storage to report.
-  if (node.capacity <= 0) return `JUNCTION - relay only, no storage${suffix}`;
   return `${node.type.toUpperCase()} - stock ${Math.floor(node.stock)}/${node.capacity}${suffix}`;
 }
 
@@ -447,6 +445,8 @@ function nodeAt(point: Point): NodeSnapshot | null {
   let best: NodeSnapshot | null = null;
   let bestDist = Infinity;
   for (const node of snapshot.nodes) {
+    // Invisible, so it must not be clickable either.
+    if (node.type === 'junction') continue;
     const reach = nodeRadius(node.type, worldPerPixel) + slop;
     const d = Math.hypot(node.x - point.x, node.y - point.y);
     if (d <= reach && d < bestDist) {

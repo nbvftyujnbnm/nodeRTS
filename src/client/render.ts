@@ -132,6 +132,10 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
 
   // --- nodes
   for (const node of snapshot.nodes) {
+    // Junctions are not drawn. They exist so the graph knows where lines meet;
+    // on screen a crossing should just look like two lines crossing, and the
+    // split halves are collinear with the originals, so nothing is lost.
+    if (node.type === 'junction') continue;
     drawNode(
       ctx,
       node,
