@@ -236,6 +236,9 @@ but world coordinates never change, and there is no camera scrolling.
 | Zoom | Wheel / trackpad | Pinch |
 | Fit the whole board | The fit button, or `0` | The fit button |
 | Cancel the selection | Right click, or `Esc` | The **Cancel selection** button |
+| Hide the log and help | `H`, or the ⓘ button | The ⓘ button |
+
+Hiding the log and the control notes is remembered between sessions.
 
 Dragging from a selected node shows the live preview - distance, cost and
 whether it is legal - before you commit, which is the only way to get that
@@ -290,6 +293,12 @@ the panel on the right).
   to land. That means dragging a chain of relays right up to their door and
   holding it there while the blow lands. Cut the chain underneath an assault
   and it is cancelled, and everything past the cut changes hands.
+
+  The target is **warned the moment the line is started**, not when it lands: a
+  banner names the attacker and counts down the seconds left, the assault line
+  is drawn thick and pulsing with a ring on the targeted HQ, and everyone else
+  sees it in the log. The whole point of making the killing blow slow is that
+  it can be answered, which only works if the victim knows.
 
 With 2 players, capturing the enemy HQ wins immediately. With 3+, the
 eliminated player's entire empire transfers to the attacker and the match
@@ -466,6 +475,10 @@ The notable ones:
   which gives the game an engine to break ties and ties the economy to the core
   mechanic: cutting an enemy network takes their income as well as their
   ground. `tests/economy.test.ts` guards it.
+- **The assault warning is derived from the snapshot, not only from an event.**
+  Each construction carries the id of the player whose HQ it targets, so the
+  banner is right after a reconnect or a dropped packet and clears itself the
+  instant the line lands or is cut. The event exists too, for the log.
 - **Junctions are invisible and inert, a deliberate break from the original
   spec.** The spec had them store resources and act as build sources, i.e.
   bases that appear for free wherever two of your lines cross. Once supplied

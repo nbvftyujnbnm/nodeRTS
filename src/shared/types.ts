@@ -32,6 +32,14 @@ export interface Construction {
   finishTime: number;
   cost: number;
   distance: number;
+  /**
+   * Set when this line is a direct assault on that player's headquarters.
+   *
+   * Carried on the construction rather than only announced as an event, so a
+   * client that joins, reconnects or misses a packet still knows from the next
+   * snapshot that an HQ is under attack.
+   */
+  assaultOnPlayerId: string | null;
 }
 
 export interface PlayerPublic {
@@ -69,6 +77,7 @@ export type GameEvent =
   | { type: 'playerReconnected'; playerId: string; name: string }
   | { type: 'matchStarted' }
   | { type: 'constructionStarted'; constructionId: string; playerId: string; sourceNodeId: string; x: number; y: number }
+  | { type: 'hqAssaultStarted'; constructionId: string; attackerId: string; victimId: string; finishTime: number }
   | { type: 'constructionCompleted'; constructionId: string; playerId: string }
   | { type: 'constructionCancelled'; constructionId: string; playerId: string; reason: string }
   | { type: 'supplyLineCut'; attackerId: string; victimId: string; edgeId: string; x: number; y: number }

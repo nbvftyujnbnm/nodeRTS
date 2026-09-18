@@ -61,6 +61,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   if (!snapshot) return;
 
   const colors = new Map(snapshot.players.map((p) => [p.id, p.color]));
+  const initials = new Map(snapshot.players.map((p) => [p.id, initialOf(p.name)]));
   const nodes = new Map(snapshot.nodes.map((n) => [n.id, n]));
   const colorOf = (ownerId: string): string => colors.get(ownerId) ?? '#8d94a3';
 
@@ -89,6 +90,8 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     const tipX = source.x + (construction.targetX - source.x) * progress;
     const tipY = source.y + (construction.targetY - source.y) * progress;
 
+    const assault = construction.assaultOnPlayerId !== null;
+
     ctx.save();
     ctx.strokeStyle = colorOf(construction.ownerId);
     ctx.lineWidth = 2 * k;
@@ -100,13 +103,33 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
     ctx.stroke();
 
     ctx.globalAlpha = 0.95;
-    ctx.lineWidth = 3 * k;
+    ctx.lineWidth = (assault ? 6 : 3) * k;
     ctx.setLineDash([9 * k, 6 * k]);
     ctx.lineDashOffset = (-(serverNow / 28) % 15) * k;
     ctx.beginPath();
     ctx.moveTo(source.x, source.y);
     ctx.lineTo(tipX, tipY);
     ctx.stroke();
+
+    // An assault is the one build that ends someone's match; make it unmissable.
+    if (assault) {
+      ctx.globalAlpha = 0.45 + 0.35 * Math.sin(serverNow / 120);
+      ctx.strokeStyle = '#ff5a4d';
+      ctx.lineWidth = 12 * k;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(source.x, source.y);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(construction.targetX, construction.targetY, (26 + 8 * Math.sin(serverNow / 140)) * k, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ff5a4d';
+      ctx.lineWidth = 2.5 * k;
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -143,6 +166,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
       node.id === state.selectedNodeId,
       node.id === state.hoverNodeId,
       k,
+      initials.get(node.ownerId) ?? '?',
     );
   }
 }
@@ -151,6 +175,14 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
  * On-screen radius of a node, in world units. Shared with hit testing so what
  * you can tap is exactly what you can see.
  */
+/** First visible character of a name, for the badge on a headquarters. */
+export function initialOf(name: string): string {
+  for (const character of Array.from(name)) {
+    if (character.trim().length > 0) return character.toUpperCase();
+  }
+  return '?';
+}
+
 export function nodeRadius(type: NodeSnapshot['type'], worldPerPixel: number): number {
   const base = type === 'hq' ? 17 : type === 'base' ? 9 : 5;
   return Math.max(base, MIN_SCREEN_RADIUS[type] * worldPerPixel);
@@ -163,6 +195,7 @@ function drawNode(
   selected: boolean,
   hovered: boolean,
   k: number,
+  initial: string,
 ): void {
   const radius = nodeRadius(node.type, k);
 
@@ -182,7 +215,7 @@ function drawNode(
     ctx.font = `bold ${Math.max(18, radius * 1.05)}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('H', node.x, node.y + 1);
+    ctx.fillText(initial, node.x, node.y + 1);
   }
 
   if (selected || hovered) {

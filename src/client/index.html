@@ -26,8 +26,15 @@
           <div class="extra">Cross your own lines to link them together</div>
           <div class="extra">Cross enemy lines to cut them</div>
           <div class="extra" id="controls-hq"></div>
+          <div class="extra">Press <b>H</b> to hide this and the log</div>
         </div>
       </div>
+    </div>
+
+    <!-- Shown while someone is driving a line into your headquarters -->
+    <div id="alert" class="hidden" role="alert">
+      <span id="alert-text"></span>
+      <span id="alert-timer"></span>
     </div>
 
     <!-- Zoom / fit controls, usable without a wheel or trackpad -->
@@ -35,6 +42,7 @@
       <button id="btn-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
       <button id="btn-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
       <button id="btn-zoom-fit" type="button" aria-label="Fit whole board" title="Fit whole board">&#9634;</button>
+      <button id="btn-hud" type="button" aria-label="Hide log and help" title="Hide log and help (H)">&#9432;</button>
     </div>
 
     <!-- Touch has no right click, so cancelling needs a target -->

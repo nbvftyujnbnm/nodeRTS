@@ -437,3 +437,63 @@ describe('fast transport reconnects', () => {
     expect(room.players.get(ids[1])!.connected).toBe(false);
   });
 });
+
+/** The victim has to know a direct assault is coming while they can still cut it. */
+describe('headquarters assault warning', () => {
+  function stage() {
+    const { room, ids } = startedRoom(3);
+    const [attacker, victim] = ids;
+    const victimHq = hqNode(room, victim);
+    const attackerHq = hqNode(room, attacker);
+    const toCentre = towardCentre(victimHq, 180);
+    const forward = addNode(room.world, attacker, 'base', toCentre.x, toCentre.y, BASE_MAX_STOCK);
+    addEdge(room.world, attacker, attackerHq.id, forward.id);
+    return { room, attacker, victim, victimHq, forward };
+  }
+
+  it('marks the construction with the player whose HQ is targeted', () => {
+    const { room, attacker, victim, victimHq, forward } = stage();
+    const result = room.requestBuild(attacker, forward.id, victimHq.x, victimHq.y, 2_000);
+    expect(result.ok).toBe(true);
+
+    const construction = [...room.constructions.values()][0];
+    expect(construction.assaultOnPlayerId).toBe(victim);
+  });
+
+  it('announces it the moment the line is started, not when it lands', () => {
+    const { room, attacker, victim, victimHq, forward } = stage();
+    room.drainEvents();
+    const result = room.requestBuild(attacker, forward.id, victimHq.x, victimHq.y, 2_000);
+
+    const warning = room.drainEvents().find((e) => e.type === 'hqAssaultStarted');
+    expect(warning).toBeDefined();
+    if (warning && warning.type === 'hqAssaultStarted') {
+      expect(warning.attackerId).toBe(attacker);
+      expect(warning.victimId).toBe(victim);
+      // Far enough ahead of the landing to be worth acting on.
+      expect(warning.finishTime).toBeGreaterThan(2_000);
+      expect(warning.finishTime).toBe(result.constructionId ? warning.finishTime : 0);
+    }
+    expect(room.status).toBe('playing'); // nothing has landed yet
+  });
+
+  it('leaves ordinary builds unflagged and unannounced', () => {
+    const { room, attacker, forward } = stage();
+    room.drainEvents();
+    const aim = towardCentre(forward, 120);
+    room.requestBuild(attacker, forward.id, aim.x, aim.y, 2_000);
+
+    const construction = [...room.constructions.values()][0];
+    expect(construction.assaultOnPlayerId).toBeNull();
+    expect(room.drainEvents().some((e) => e.type === 'hqAssaultStarted')).toBe(false);
+  });
+
+  it('keeps the flag visible in snapshots, so a late joiner still sees it', () => {
+    const { room, attacker, victim, victimHq, forward } = stage();
+    room.requestBuild(attacker, forward.id, victimHq.x, victimHq.y, 2_000);
+
+    const snapshot = room.snapshot(2_100);
+    const underAttack = snapshot.constructions.filter((c) => c.assaultOnPlayerId === victim);
+    expect(underAttack).toHaveLength(1);
+  });
+});

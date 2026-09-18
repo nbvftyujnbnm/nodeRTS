@@ -354,6 +354,8 @@ export class GameRoom {
       finishTime: now + evaluation.buildTime * 1000,
       cost: evaluation.cost,
       distance: evaluation.distance,
+      assaultOnPlayerId:
+        evaluation.target.kind === 'enemyHq' ? evaluation.target.node?.ownerId ?? null : null,
     };
     this.constructions.set(construction.id, construction);
     this.lastActivityAt = now;
@@ -366,6 +368,18 @@ export class GameRoom {
       x: construction.targetX,
       y: construction.targetY,
     });
+
+    // Losing your HQ ends your match, so the victim is told the moment the
+    // line is started rather than when it lands.
+    if (construction.assaultOnPlayerId) {
+      this.emit({
+        type: 'hqAssaultStarted',
+        constructionId: construction.id,
+        attackerId: playerId,
+        victimId: construction.assaultOnPlayerId,
+        finishTime: construction.finishTime,
+      });
+    }
 
     return { ok: true, reason: null, constructionId: construction.id, evaluation };
   }

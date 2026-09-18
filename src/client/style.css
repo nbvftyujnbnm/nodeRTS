@@ -310,3 +310,57 @@ button.ghost { background: none; border-color: #3b414b; color: #8d94a3; }
   input { min-height: 44px; font-size: 16px; } /* 16px stops iOS zooming on focus */
   .segmented button { min-height: 44px; }
 }
+
+
+/* --------------------------------------------------- assault warning */
+
+#alert {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 18px;
+  border: 1px solid #ff6b5e;
+  border-radius: 6px;
+  background: rgba(70, 16, 12, 0.92);
+  color: #ffd9d5;
+  font-size: 14px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: alert-pulse 1s ease-in-out infinite;
+}
+#alert-timer { color: #fff; font-variant-numeric: tabular-nums; }
+
+@keyframes alert-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 94, 0.55); }
+  50% { box-shadow: 0 0 0 9px rgba(255, 107, 94, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #alert { animation: none; }
+}
+
+/* The banner sits where the HUD panels do, so make room for it. */
+#alert:not(.hidden) ~ #hud .panel { opacity: 0.85; }
+
+@media (max-width: 620px) {
+  #alert {
+    font-size: 12px;
+    padding: 7px 12px;
+    max-width: calc(100vw - 24px);
+    white-space: normal;
+    text-align: center;
+  }
+}
+
+/* ------------------------------------------- clean view (log/help off) */
+
+body.hud-minimal #log,
+body.hud-minimal .controls {
+  display: none;
+}
+#btn-hud.off { color: #6b7382; border-color: #3b414b; }

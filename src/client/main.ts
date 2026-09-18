@@ -74,6 +74,10 @@ const btnZoomIn = $<HTMLButtonElement>('btn-zoom-in');
 const btnZoomOut = $<HTMLButtonElement>('btn-zoom-out');
 const btnZoomFit = $<HTMLButtonElement>('btn-zoom-fit');
 const btnCancelSel = $<HTMLButtonElement>('btn-cancel-sel');
+const btnHud = $<HTMLButtonElement>('btn-hud');
+const alertBox = $('alert');
+const alertText = $('alert-text');
+const alertTimer = $('alert-timer');
 const controlsHq = $('controls-hq');
 
 // Written from the constants so the on-screen rules cannot drift from the sim.
@@ -325,6 +329,35 @@ function renderHud(): void {
   hudSelection.textContent = selected ? describeNode(selected) : 'No node selected';
 }
 
+/**
+ * Derived from the snapshot rather than from the event, so the banner is
+ * correct after a reconnect or a dropped packet and disappears by itself the
+ * moment the line lands or is cut.
+ */
+function refreshAssaultAlert(): void {
+  const snapshot = state.snapshot;
+  const youId = state.youId;
+  if (!snapshot || !youId || snapshot.status !== 'playing') {
+    alertBox.classList.add('hidden');
+    return;
+  }
+
+  const incoming = snapshot.constructions.filter((c) => c.assaultOnPlayerId === youId);
+  if (incoming.length === 0) {
+    alertBox.classList.add('hidden');
+    return;
+  }
+
+  const soonest = incoming.reduce((a, b) => (a.finishTime <= b.finishTime ? a : b));
+  const attacker = snapshot.players.find((p) => p.id === soonest.ownerId);
+  const serverNow = snapshot.serverTime + (performance.now() - state.snapshotReceivedAt);
+  const seconds = Math.max(0, (soonest.finishTime - serverNow) / 1000);
+
+  alertText.textContent = `${attacker?.name ?? 'Someone'} is storming your HQ - cut the line`;
+  alertTimer.textContent = `${seconds.toFixed(1)}s`;
+  alertBox.classList.remove('hidden');
+}
+
 function describeNode(node: NodeSnapshot): string {
   const suffix = node.connected ? '' : ' - UNSUPPLIED';
   return `${node.type.toUpperCase()} - stock ${Math.floor(node.stock)}/${node.capacity}${suffix}`;
@@ -352,6 +385,14 @@ function handleEvent(event: GameEvent): void {
       break;
     case 'matchStarted':
       pushLog('match started - expand your network', 'good');
+      break;
+    case 'hqAssaultStarted':
+      pushLog(
+        event.victimId === state.youId
+          ? `${nameOf(event.attackerId)} is storming YOUR headquarters`
+          : `${nameOf(event.attackerId)} is storming the HQ of ${nameOf(event.victimId)}`,
+        'attack',
+      );
       break;
     case 'supplyLineCut':
       pushLog(`${nameOf(event.attackerId)} cut a supply line of ${nameOf(event.victimId)}`, 'attack');
@@ -573,6 +614,35 @@ btnZoomOut.addEventListener('click', () => zoomFromCentre(1 / 1.4));
 btnZoomFit.addEventListener('click', fitBoard);
 btnCancelSel.addEventListener('click', () => setSelection(null));
 
+const HUD_KEY = 'nodeRTS.hudMinimal';
+
+function setHudMinimal(minimal: boolean): void {
+  document.body.classList.toggle('hud-minimal', minimal);
+  btnHud.classList.toggle('off', minimal);
+  btnHud.setAttribute('aria-label', minimal ? 'Show log and help' : 'Hide log and help');
+  btnHud.title = `${minimal ? 'Show' : 'Hide'} log and help (H)`;
+  try {
+    localStorage.setItem(HUD_KEY, minimal ? '1' : '0');
+  } catch {
+    /* storage can be unavailable; the toggle still works for this session */
+  }
+}
+
+function toggleHud(): void {
+  setHudMinimal(!document.body.classList.contains('hud-minimal'));
+}
+
+btnHud.addEventListener('click', toggleHud);
+setHudMinimal(
+  (() => {
+    try {
+      return localStorage.getItem(HUD_KEY) === '1';
+    } catch {
+      return false;
+    }
+  })(),
+);
+
 function zoomFromCentre(factor: number): void {
   setCamera(
     zoomAt(state.camera, state.view, { x: state.view.width / 2, y: state.view.height / 2 }, factor),
@@ -582,6 +652,7 @@ function zoomFromCentre(factor: number): void {
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') setSelection(null);
   if (event.key === '0') fitBoard();
+  if (event.key === 'h' || event.key === 'H') toggleHud();
 });
 
 // ----------------------------------------------------------- menu actions
@@ -642,6 +713,7 @@ btnAgain.addEventListener('click', returnToMenu);
 let lastBuildLabel = '';
 
 function frame(): void {
+  refreshAssaultAlert();
   const preview = currentPreview();
 
   const renderState: RenderState = {
