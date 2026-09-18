@@ -1,4 +1,5 @@
-import type { GameEvent, PlayerPublic, RoomStatus, Snapshot } from '../shared/types';
+import type { SnapshotMessage } from '../shared/delta';
+import type { GameEvent, PlayerPublic, RoomStatus } from '../shared/types';
 
 /**
  * Wire format for peer-to-peer matches.
@@ -17,7 +18,7 @@ export type GuestToHost =
 export type HostToGuest =
   | { t: 'joined'; roomCode: string; playerId: string; reconnectToken: string; status: RoomStatus }
   | { t: 'lobby'; roomCode: string; hostId: string | null; status: RoomStatus; players: PlayerPublic[] }
-  | { t: 'snap'; snapshot: Snapshot }
+  | { t: 'snap'; snapshot: SnapshotMessage }
   | { t: 'events'; events: GameEvent[] }
   | { t: 'err'; message: string }
   | { t: 'kick'; message: string };

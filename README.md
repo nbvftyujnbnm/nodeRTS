@@ -375,6 +375,36 @@ events (`constructionStarted`, `supplyLineCut`, `networkCaptured`, `hqCaptured`,
 `playerEliminated`, `victory`, ...) are emitted immediately as they happen.
 Clients interpolate the construction animation visually and nothing else.
 
+Snapshots are sent as **deltas against the last broadcast**, with a keyframe
+every five seconds and whenever anyone joins or reconnects. Full snapshots cost
+a client 360 KiB/s in a six-player match, because nearly all of it - positions,
+owners, types, and the stock of every node already at capacity - is identical
+tick after tick. Both transports guarantee ordered delivery, and a client that
+somehow has no base to merge onto waits for the next keyframe rather than
+drawing a half-built board. Derivable fields are not sent at all: node capacity
+follows from its type, and an edge's length from its endpoints.
+
+### Performance
+
+Measured on a six-player board, before and after:
+
+| | before | after |
+| --- | --- | --- |
+| Snapshot traffic, settled 246-node board | 360 KiB/s | **9 KiB/s** |
+| Snapshot traffic, whole network filling | 357 KiB/s | **91 KiB/s** |
+| Server CPU per wall-clock second, 606 nodes | 24.3 ms | **6.7 ms** |
+| `room.tick()`, 606 nodes | 1193 us | **320 us** |
+| Initial client download | 180 kB (53 kB gzip) | **28 kB (11 kB gzip)** |
+
+Three changes did it. Snapshots became deltas (above). Dijkstra, which ran per
+player per tick and was the whole supply pass, moved from an O(V^2) scan to a
+binary heap. And the two transports are loaded on demand: socket.io and peerjs
+are most of the download, a session only ever uses one of them, and a
+peer-to-peer build served from a static host never needs socket.io at all.
+
+On the client, the per-snapshot indexes the renderer and the build preview need
+are built once per snapshot instead of once per frame.
+
 ### Tuning
 
 Every gameplay number is in **`src/shared/config.ts`** and is used by both the
@@ -420,6 +450,10 @@ however long they are supplied, no income however many a single build mints,
 a refusal with a reason when one is used as a build source, never being snapped
 onto while aiming, and - the part that must keep working - supply still flowing
 through them to what lies beyond.
+
+`delta.test.ts` covers the wire format, including a 400-tick match replay
+that builds, captures and deletes nodes and asserts a delta-fed client ends up
+byte-identical to one receiving full snapshots.
 
 `camera.test.ts` covers the zoom and pan maths: screen/world round-trips, the
 board never being zoomed out past fitting or dragged off screen, an axis that

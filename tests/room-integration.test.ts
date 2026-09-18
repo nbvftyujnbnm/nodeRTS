@@ -111,7 +111,9 @@ describe('cutting an enemy network through the room API', () => {
     expect(snapshot.nodes.length).toBeGreaterThan(0);
     const hq = snapshot.nodes.find((n) => n.ownerId === attacker && n.type === 'hq');
     expect(hq?.connected).toBe(true);
-    expect(hq?.capacity).toBe(500);
+    // Derivable fields are not paid for on the wire.
+    expect(hq).not.toHaveProperty('capacity');
+    expect(snapshot.edges[0]).not.toHaveProperty('length');
     // No server-only fields leak into the snapshot.
     expect(JSON.stringify(snapshot)).not.toContain('reconnectToken');
     expect(JSON.stringify(snapshot)).not.toContain('socketId');

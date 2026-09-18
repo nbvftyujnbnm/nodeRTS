@@ -51,11 +51,26 @@ export interface PlayerPublic {
   isHost: boolean;
 }
 
-/** A node as broadcast to clients: includes server-computed supply state. */
+/**
+ * A node as broadcast to clients.
+ *
+ * `capacity` is not sent: it follows from `type` through the shared config, and
+ * at ten snapshots a second every derivable field is paid for over and over.
+ */
 export interface NodeSnapshot extends GameNode {
   /** True when the server's Dijkstra pass reached this node from its owner's HQ. */
   connected: boolean;
-  capacity: number;
+}
+
+/**
+ * An edge as broadcast to clients. `length` is not sent - the client draws
+ * between two node positions it already has.
+ */
+export interface EdgeSnapshot {
+  id: string;
+  ownerId: string;
+  nodeA: string;
+  nodeB: string;
 }
 
 export interface Snapshot {
@@ -64,7 +79,7 @@ export interface Snapshot {
   serverTime: number;
   players: PlayerPublic[];
   nodes: NodeSnapshot[];
-  edges: GameEdge[];
+  edges: EdgeSnapshot[];
   constructions: Construction[];
   winnerId: string | null;
   hostId: string | null;

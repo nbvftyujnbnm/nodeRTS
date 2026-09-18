@@ -6,12 +6,10 @@ import {
   MIN_PLAYERS,
   PLAYER_COLORS,
   RECONNECT_GRACE_MS,
-  WORLD_HEIGHT,
-  WORLD_WIDTH,
-  capacityForNodeType,
 } from '../shared/config';
 import type {
   Construction,
+  EdgeSnapshot,
   GameEvent,
   NodeSnapshot,
   PlayerPublic,
@@ -504,20 +502,42 @@ export class GameRoom {
 
   snapshot(now: number): Snapshot {
     const nodes: NodeSnapshot[] = [];
+    // Connectivity for owners the tick did not compute (a player with no HQ),
+    // worked out at most once each rather than once per node.
+    const fallback = new Map<string, Set<string>>();
+
     for (const node of this.world.nodes.values()) {
       const distances = this.supplyDistances.get(node.ownerId);
-      const connected =
-        node.type === 'hq'
-          ? true
-          : distances
-            ? distances.has(node.id)
-            : this.connectedNodeIds(node.ownerId).has(node.id);
+      let connected: boolean;
+      if (node.type === 'hq') {
+        connected = true;
+      } else if (distances) {
+        connected = distances.has(node.id);
+      } else {
+        let reachable = fallback.get(node.ownerId);
+        if (!reachable) {
+          reachable = this.connectedNodeIds(node.ownerId);
+          fallback.set(node.ownerId, reachable);
+        }
+        connected = reachable.has(node.id);
+      }
+
       nodes.push({
-        ...node,
-        stock: Math.round(node.stock * 10) / 10,
+        id: node.id,
+        ownerId: node.ownerId,
+        type: node.type,
+        // Rounded for the wire only: whole units are all the bar and the
+        // readout show, and stable values keep them out of the next delta.
+        x: Math.round(node.x * 10) / 10,
+        y: Math.round(node.y * 10) / 10,
+        stock: Math.round(node.stock),
         connected,
-        capacity: capacityForNodeType(node.type),
       });
+    }
+
+    const edges: EdgeSnapshot[] = [];
+    for (const edge of this.world.edges.values()) {
+      edges.push({ id: edge.id, ownerId: edge.ownerId, nodeA: edge.nodeA, nodeB: edge.nodeB });
     }
 
     return {
@@ -526,7 +546,7 @@ export class GameRoom {
       serverTime: now,
       players: this.publicPlayers(),
       nodes,
-      edges: [...this.world.edges.values()],
+      edges,
       constructions: [...this.constructions.values()],
       winnerId: this.winnerId,
       hostId: this.hostId,

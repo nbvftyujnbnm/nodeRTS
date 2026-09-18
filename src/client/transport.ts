@@ -1,4 +1,5 @@
-import type { GameEvent, PlayerPublic, RoomStatus, Snapshot } from '../shared/types';
+import type { SnapshotMessage } from '../shared/delta';
+import type { GameEvent, PlayerPublic, RoomStatus } from '../shared/types';
 
 export interface LobbyPayload {
   roomCode: string;
@@ -17,7 +18,8 @@ export interface RoomJoinedPayload {
 export interface NetHandlers {
   onRoomJoined(payload: RoomJoinedPayload): void;
   onLobby(payload: LobbyPayload): void;
-  onSnapshot(snapshot: Snapshot): void;
+  /** A keyframe or a delta; the UI layer merges it. */
+  onSnapshot(message: SnapshotMessage): void;
   onEvents(events: GameEvent[]): void;
   onError(message: string): void;
   /**

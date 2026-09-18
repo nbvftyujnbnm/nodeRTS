@@ -1,4 +1,4 @@
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../shared/config';
+import { WORLD_HEIGHT, WORLD_WIDTH, capacityForNodeType } from '../shared/config';
 import type { NodeSnapshot, Snapshot } from '../shared/types';
 import type { Camera, Viewport } from './camera';
 
@@ -60,9 +60,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   const snapshot = state.snapshot;
   if (!snapshot) return;
 
-  const colors = new Map(snapshot.players.map((p) => [p.id, p.color]));
-  const initials = new Map(snapshot.players.map((p) => [p.id, initialOf(p.name)]));
-  const nodes = new Map(snapshot.nodes.map((n) => [n.id, n]));
+  const { colors, initials, nodes } = lookupsFor(snapshot);
   const colorOf = (ownerId: string): string => colors.get(ownerId) ?? '#8d94a3';
 
   // --- finished supply lines
@@ -175,6 +173,33 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
  * On-screen radius of a node, in world units. Shared with hit testing so what
  * you can tap is exactly what you can see.
  */
+interface Lookups {
+  colors: Map<string, string>;
+  initials: Map<string, string>;
+  nodes: Map<string, NodeSnapshot>;
+}
+
+let cachedSnapshot: Snapshot | null = null;
+let cachedLookups: Lookups | null = null;
+
+/**
+ * Index the snapshot once per snapshot rather than once per frame. Snapshots
+ * are replaced wholesale when one arrives, so identity is a safe cache key,
+ * and at sixty frames a second a large board was rebuilding hundreds of map
+ * entries for every single one.
+ */
+function lookupsFor(snapshot: Snapshot): Lookups {
+  if (cachedSnapshot === snapshot && cachedLookups) return cachedLookups;
+  const lookups: Lookups = {
+    colors: new Map(snapshot.players.map((p) => [p.id, p.color])),
+    initials: new Map(snapshot.players.map((p) => [p.id, initialOf(p.name)])),
+    nodes: new Map(snapshot.nodes.map((n) => [n.id, n])),
+  };
+  cachedSnapshot = snapshot;
+  cachedLookups = lookups;
+  return lookups;
+}
+
 /** First visible character of a name, for the badge on a headquarters. */
 export function initialOf(name: string): string {
   for (const character of Array.from(name)) {
@@ -228,10 +253,11 @@ function drawNode(
 
   // Stock readout: a short bar plus the number. Junctions store nothing, so
   // they get no gauge - an empty bar under every crossing is just noise.
-  if (node.capacity <= 0) return;
+  const capacity = capacityForNodeType(node.type);
+  if (capacity <= 0) return;
   const barWidth = (node.type === 'hq' ? 44 : 26) * k;
   const barHeight = 4 * k;
-  const fill = node.capacity > 0 ? clamp01(node.stock / node.capacity) : 0;
+  const fill = clamp01(node.stock / capacity);
   const barY = node.y + radius + 6 * k;
   ctx.fillStyle = 'rgba(17,20,26,0.8)';
   ctx.fillRect(node.x - barWidth / 2, barY, barWidth, barHeight);

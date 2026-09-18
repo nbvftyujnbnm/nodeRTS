@@ -12,6 +12,8 @@ import {
   WORLD_WIDTH,
 } from '../shared/config';
 import { C2S, S2C } from '../shared/protocol';
+import { diffSnapshot } from '../shared/delta';
+import type { Snapshot } from '../shared/types';
 import type { GameRoom } from '../game/room';
 import { RoomManager, normalizeCode } from './rooms';
 
@@ -70,6 +72,31 @@ const io = new Server(httpServer, {
 });
 
 const rooms = new RoomManager();
+
+/**
+ * What each room last broadcast, so the next one can carry only the changes.
+ * A keyframe goes out periodically, and whenever someone joins or reconnects,
+ * so a client can never be stranded applying deltas onto a view it never had.
+ */
+const lastBroadcast = new Map<string, Snapshot>();
+const KEYFRAME_EVERY = 50; // broadcasts, i.e. every 5 seconds at 10Hz
+const sinceKeyframe = new Map<string, number>();
+
+function broadcastSnapshot(room: GameRoom, now: number): void {
+  const snapshot = room.snapshot(now);
+  const ticks = (sinceKeyframe.get(room.code) ?? KEYFRAME_EVERY) + 1;
+  const keyframe = ticks >= KEYFRAME_EVERY;
+  sinceKeyframe.set(room.code, keyframe ? 0 : ticks);
+
+  const previous = keyframe ? null : lastBroadcast.get(room.code) ?? null;
+  io.to(room.code).emit(S2C.snapshot, diffSnapshot(previous, snapshot));
+  lastBroadcast.set(room.code, snapshot);
+}
+
+/** Make the next broadcast a keyframe, for a client that has no view yet. */
+function requestKeyframe(room: GameRoom): void {
+  sinceKeyframe.set(room.code, KEYFRAME_EVERY);
+}
 
 /** socket.id -> where that socket currently sits. */
 interface Session {
@@ -154,6 +181,7 @@ io.on('connection', (socket) => {
       reconnectToken: result.reconnectToken,
       status: room.status,
     });
+    requestKeyframe(room);
     broadcastLobby(room);
     log(`room ${room.code} created by ${result.name}`);
   });
@@ -183,6 +211,7 @@ io.on('connection', (socket) => {
       reconnectToken: result.reconnectToken,
       status: room.status,
     });
+    requestKeyframe(room);
     broadcastLobby(room);
     flushEvents(room);
     log(`${result.name} joined room ${room.code} (${room.players.size}/${MAX_PLAYERS})`);
@@ -211,7 +240,8 @@ io.on('connection', (socket) => {
       reconnectToken: player.reconnectToken,
       status: room.status,
     });
-    socket.emit(S2C.snapshot, room.snapshot(now));
+    socket.emit(S2C.snapshot, { ...room.snapshot(now), full: true });
+    requestKeyframe(room);
     broadcastLobby(room);
     flushEvents(room);
     log(`${player.name} reconnected to room ${room.code}`);
@@ -293,11 +323,13 @@ setInterval(() => {
     const statusBefore = room.status;
     room.tick(now);
     flushEvents(room);
-    if (shouldSnapshot) io.to(room.code).emit(S2C.snapshot, room.snapshot(now));
+    if (shouldSnapshot) broadcastSnapshot(room, now);
     if (statusBefore !== room.status) broadcastLobby(room);
   }
 
   for (const code of rooms.sweep(now)) {
+    lastBroadcast.delete(code);
+    sinceKeyframe.delete(code);
     log(`room ${code} closed`);
   }
 }, TICK_INTERVAL_MS);

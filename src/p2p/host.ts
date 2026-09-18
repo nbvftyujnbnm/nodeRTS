@@ -1,11 +1,16 @@
 import { GameRoom } from '../game/room';
 import { SNAPSHOT_INTERVAL_MS } from '../shared/config';
+import { diffSnapshot } from '../shared/delta';
+import type { Snapshot } from '../shared/types';
 import type { GuestToHost, HostToGuest } from './protocol';
 
 /**
  * One connected guest, from the host's point of view. Abstract so the session
  * can be unit tested without any WebRTC.
  */
+/** Broadcasts between keyframes; 5 seconds at the snapshot rate. */
+const KEYFRAME_EVERY = 50;
+
 export interface HostClient {
   id: string;
   send(message: HostToGuest): void;
@@ -30,6 +35,9 @@ export class HostSession {
   private readonly playerByClient = new Map<string, string>();
   private readonly clientByPlayer = new Map<string, string>();
   private sinceSnapshot = 0;
+  /** Last broadcast state, so the next one can carry only the changes. */
+  private lastBroadcast: Snapshot | null = null;
+  private sinceKeyframe = KEYFRAME_EVERY;
 
   constructor(code: string, options: { random?: () => number } = {}) {
     this.room = new GameRoom({ code, random: options.random });
@@ -93,6 +101,7 @@ export class HostSession {
       return;
     }
     this.seat(client.id, result.id);
+    this.sinceKeyframe = KEYFRAME_EVERY;
     client.send({
       t: 'joined',
       roomCode: this.room.code,
@@ -118,7 +127,8 @@ export class HostSession {
       reconnectToken: player.reconnectToken,
       status: this.room.status,
     });
-    client.send({ t: 'snap', snapshot: this.room.snapshot(now) });
+    client.send({ t: 'snap', snapshot: { ...this.room.snapshot(now), full: true } });
+    this.sinceKeyframe = KEYFRAME_EVERY; // next broadcast is a keyframe for all
     this.broadcastLobby();
     this.flushEvents();
   }
@@ -175,7 +185,15 @@ export class HostSession {
     this.sinceSnapshot += deltaMs;
     if (this.sinceSnapshot >= SNAPSHOT_INTERVAL_MS) {
       this.sinceSnapshot = 0;
-      this.broadcast({ t: 'snap', snapshot: this.room.snapshot(now) });
+      const snapshot = this.room.snapshot(now);
+      this.sinceKeyframe += 1;
+      const keyframe = this.sinceKeyframe >= KEYFRAME_EVERY;
+      if (keyframe) this.sinceKeyframe = 0;
+      this.broadcast({
+        t: 'snap',
+        snapshot: diffSnapshot(keyframe ? null : this.lastBroadcast, snapshot),
+      });
+      this.lastBroadcast = snapshot;
     }
     if (statusBefore !== this.room.status) this.broadcastLobby();
   }

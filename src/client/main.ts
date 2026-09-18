@@ -1,4 +1,5 @@
 import {
+  capacityForNodeType,
   HQ_ASSAULT_COST_MULTIPLIER,
   HQ_ASSAULT_MAX_RANGE,
   MAX_BUILD_DISTANCE,
@@ -7,9 +8,9 @@ import {
   WORLD_WIDTH,
 } from '../shared/config';
 import { evaluateBuild, type BuildContext } from '../game/validate';
+import { applySnapshotMessage } from '../shared/delta';
 import type { GameEvent, NodeSnapshot, PlayerPublic, Snapshot } from '../shared/types';
-import { Net, loadStoredSession, storeSession } from './net';
-import { PeerTransport } from '../p2p/peerTransport';
+import { loadStoredSession, storeSession } from './session';
 import type {
   GameTransport,
   LobbyPayload,
@@ -180,7 +181,12 @@ const handlers: NetHandlers = {
     else if (payload.status === 'playing') setStatus('playing');
     renderLobby();
   },
-  onSnapshot(snapshot) {
+  onSnapshot(message) {
+    const merged = applySnapshotMessage(state.snapshot, message);
+    // A delta with no base can only happen if a keyframe was missed; wait for
+    // the next one rather than drawing a half-built board.
+    if (!merged) return;
+    const snapshot = merged;
     state.snapshot = snapshot;
     state.snapshotReceivedAt = performance.now();
     state.hostId = snapshot.hostId;
@@ -218,10 +224,41 @@ const handlers: NetHandlers = {
   },
 };
 
-function makeTransport(mode: TransportMode): GameTransport {
+/**
+ * Transports are loaded on demand. socket.io and peerjs are most of the
+ * download, a session only ever uses one of them, and a peer-to-peer build
+ * served from a static host never needs socket.io at all.
+ */
+async function makeTransport(mode: TransportMode): Promise<GameTransport> {
   net?.dispose();
-  net = mode === 'p2p' ? new PeerTransport(handlers) : new Net(handlers);
+  net = null;
+  if (mode === 'p2p') {
+    const { PeerTransport } = await import('../p2p/peerTransport');
+    net = new PeerTransport(handlers);
+  } else {
+    const { Net } = await import('./net');
+    net = new Net(handlers);
+  }
   return net;
+}
+
+/** Guards the menu while a transport module is still downloading. */
+let connecting = false;
+
+async function withTransport(mode: TransportMode, use: (t: GameTransport) => void): Promise<void> {
+  if (connecting) return;
+  connecting = true;
+  btnCreate.disabled = true;
+  btnJoin.disabled = true;
+  try {
+    use(await makeTransport(mode));
+  } catch {
+    overlayError.textContent = 'could not load the networking code - check your connection';
+  } finally {
+    connecting = false;
+    btnCreate.disabled = false;
+    btnJoin.disabled = false;
+  }
 }
 
 function setMode(mode: TransportMode): void {
@@ -360,7 +397,9 @@ function refreshAssaultAlert(): void {
 
 function describeNode(node: NodeSnapshot): string {
   const suffix = node.connected ? '' : ' - UNSUPPLIED';
-  return `${node.type.toUpperCase()} - stock ${Math.floor(node.stock)}/${node.capacity}${suffix}`;
+  const capacity = capacityForNodeType(node.type);
+  if (capacity <= 0) return `JUNCTION - relay only, no storage${suffix}`;
+  return `${node.type.toUpperCase()} - stock ${Math.floor(node.stock)}/${capacity}${suffix}`;
 }
 
 // ------------------------------------------------------------ event ticker
@@ -502,10 +541,18 @@ function nodeAt(point: Point): NodeSnapshot | null {
  * Preview-only evaluation. The server re-runs exactly this validation and is
  * the only thing that can actually create a line.
  */
+let cachedContextFor: Snapshot | null = null;
+let cachedContext: BuildContext | null = null;
+
 function contextFromSnapshot(snapshot: Snapshot, youId: string): BuildContext {
+  // Rebuilt once per snapshot, not once per frame: the preview runs this every
+  // animation frame and it indexes every node on the board.
+  if (cachedContextFor === snapshot && cachedContext && cachedContext.playerId === youId) {
+    return cachedContext;
+  }
   const byId = new Map(snapshot.nodes.map((n) => [n.id, n]));
   const me = snapshot.players.find((p) => p.id === youId);
-  return {
+  const context: BuildContext = {
     playerId: youId,
     alive: me?.alive ?? false,
     nodes: snapshot.nodes,
@@ -516,6 +563,9 @@ function contextFromSnapshot(snapshot: Snapshot, youId: string): BuildContext {
       snapshot.constructions.filter((c) => c.sourceNodeId === id).length,
     alivePlayerIds: new Set(snapshot.players.filter((p) => p.alive).map((p) => p.id)),
   };
+  cachedContextFor = snapshot;
+  cachedContext = context;
+  return context;
 }
 
 function currentPreview(): PreviewLine | null {
@@ -667,14 +717,18 @@ function currentName(): string {
   return name;
 }
 
-btnCreate.addEventListener('click', () => makeTransport(selectedMode).createRoom(currentName()));
+btnCreate.addEventListener('click', () => {
+  const name = currentName();
+  void withTransport(selectedMode, (t) => t.createRoom(name));
+});
 btnJoin.addEventListener('click', () => {
   const code = inputCode.value.trim().toUpperCase();
   if (!code) {
     overlayError.textContent = 'enter a room code';
     return;
   }
-  makeTransport(selectedMode).joinRoom(code, currentName());
+  const name = currentName();
+  void withTransport(selectedMode, (t) => t.joinRoom(code, name));
 });
 
 for (const button of modePicker.querySelectorAll('button')) {
@@ -754,5 +808,5 @@ const restored = loadStoredSession();
 if (restored) {
   setMode(restored.mode);
   reconnectPending = true;
-  makeTransport(restored.mode).tryReconnect(restored.roomCode, restored.token);
+  void withTransport(restored.mode, (t) => t.tryReconnect(restored.roomCode, restored.token));
 }
