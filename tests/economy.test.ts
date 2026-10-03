@@ -134,3 +134,48 @@ describe('late-game economy', () => {
     expect(hq.stock).toBeLessThan(connectedIncome);
   });
 });
+
+/**
+ * The board has no edges, so the thing that has to stop a player wandering off
+ * forever is the transport penalty, not a wall. These pin that down.
+ */
+describe('distance is what limits an infinite canvas', () => {
+  function deliveredPerSecond(routeDistance: number, supportingBases: number): number {
+    const world = createWorld();
+    const hq = addNode(world, 'p1', 'hq', 0, 0, 0);
+
+    // A nearby cluster paying for the expansion.
+    for (let i = 1; i <= supportingBases; i++) {
+      const near = addNode(world, 'p1', 'base', i * 120, 0, BASE_MAX_STOCK);
+      addEdge(world, 'p1', hq.id, near.id);
+    }
+    // One outpost, straight out at `routeDistance`.
+    const far = addNode(world, 'p1', 'base', 0, routeDistance, 0);
+    addEdge(world, 'p1', hq.id, far.id);
+
+    simulateSupply(world, [{ id: 'p1', alive: true }], 1);
+    return far.stock;
+  }
+
+  it('still supplies a distant outpost, just slowly', () => {
+    const near = deliveredPerSecond(500, 10);
+    const far = deliveredPerSecond(20_000, 10);
+    expect(near).toBeGreaterThan(far);
+    expect(far).toBeGreaterThan(0); // reachable, never hard-blocked
+  });
+
+  it('makes running away indefinitely impractical rather than illegal', () => {
+    // Ten times further out, and the same economy delivers an order of
+    // magnitude less: expansion pays for itself less and less, which is the
+    // brake that replaces a map edge.
+    const close = deliveredPerSecond(5_000, 10);
+    const distant = deliveredPerSecond(50_000, 10);
+    expect(distant).toBeLessThan(close / 5);
+  });
+
+  it('lets a bigger economy push further, so expansion is a real choice', () => {
+    const poor = deliveredPerSecond(20_000, 2);
+    const rich = deliveredPerSecond(20_000, 30);
+    expect(rich).toBeGreaterThan(poor);
+  });
+});

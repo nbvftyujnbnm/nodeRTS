@@ -1,4 +1,4 @@
-import { SPAWN_MARGIN, WORLD_HEIGHT, WORLD_WIDTH } from '../shared/config';
+import { SPAWN_AREA_HEIGHT, SPAWN_AREA_WIDTH, SPAWN_MARGIN } from '../shared/config';
 
 export interface SpawnPoint {
   x: number;
@@ -14,14 +14,14 @@ export interface SpawnPoint {
  * was decided by which corner you happened to get. Every vertex of a regular
  * polygon is the same distance from its neighbours, so no seat is better.
  *
- * The radius is the largest that keeps every vertex inside the margin rather
- * than a fixed fraction of the map, so a 2-player game stretches across the
- * full width instead of being squeezed into a circle sized by the shorter
- * axis.
+ * The radius is the largest that fits the spawn area's margin rather than a
+ * fixed fraction of it, so a 2-player game starts stretched across the long
+ * axis instead of squeezed into a circle sized by the shorter one. The board
+ * itself is unbounded; this only decides where everyone begins.
  */
 export function polygonSpawnPoints(count: number): SpawnPoint[] {
-  const cx = WORLD_WIDTH / 2;
-  const cy = WORLD_HEIGHT / 2;
+  const cx = SPAWN_AREA_WIDTH / 2;
+  const cy = SPAWN_AREA_HEIGHT / 2;
   const halfWidth = cx - SPAWN_MARGIN;
   const halfHeight = cy - SPAWN_MARGIN;
 

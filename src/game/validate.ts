@@ -6,9 +6,8 @@ import {
   MAX_ACTIVE_CONSTRUCTIONS_PER_NODE,
   MAX_ACTIVE_CONSTRUCTIONS_PER_PLAYER,
   MAX_BUILD_DISTANCE,
+  MAX_COORDINATE,
   MIN_BUILD_DISTANCE,
-  WORLD_HEIGHT,
-  WORLD_WIDTH,
   buildCostForDistance,
   buildTimeForDistance,
 } from '../shared/config';
@@ -58,8 +57,10 @@ export function evaluateBuild(
   if (!isFiniteNumber(targetX) || !isFiniteNumber(targetY)) {
     return fail('invalid target coordinates');
   }
-  if (targetX < 0 || targetX > WORLD_WIDTH || targetY < 0 || targetY > WORLD_HEIGHT) {
-    return fail('target outside world bounds');
+  // The board is unbounded, but a coordinate still has to be a sane number:
+  // this rejects the absurd rather than fencing the player in.
+  if (Math.abs(targetX) > MAX_COORDINATE || Math.abs(targetY) > MAX_COORDINATE) {
+    return fail('target is impossibly far away');
   }
   if (!ctx.alive) return fail('you have been eliminated');
 

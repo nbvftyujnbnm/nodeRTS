@@ -9,7 +9,7 @@ import {
   MAX_PLAYERS,
   MIN_BUILD_DISTANCE,
   RECONNECT_GRACE_MS,
-  WORLD_WIDTH,
+  SPAWN_AREA_WIDTH,
   buildCostForDistance,
   buildTimeForDistance,
 } from '../src/shared/config';
@@ -28,9 +28,7 @@ describe('build validation', () => {
   it('rejects builds that are too far away', () => {
     const { room, ids } = startedRoom(2);
     const hq = hqNode(room, ids[0]);
-    // Aim inwards, so an over-range build cannot also be out of bounds and
-    // trip the bounds check first.
-    const inwards = hq.x > WORLD_WIDTH / 2 ? -1 : 1;
+    const inwards = hq.x > SPAWN_AREA_WIDTH / 2 ? -1 : 1;
     const result = room.requestBuild(
       ids[0],
       hq.id,
@@ -85,8 +83,12 @@ describe('build validation', () => {
     expect(room.requestBuild(ids[0], hq.id, Number.NaN, 100, 3_000).reason).toBe(
       'invalid target coordinates',
     );
-    expect(room.requestBuild(ids[0], hq.id, 99_999, 100, 4_000).reason).toBe(
-      'target outside world bounds',
+    // The canvas is infinite, so only the absurd is refused.
+    expect(room.requestBuild(ids[0], hq.id, 99_999, 100, 4_000).reason).not.toBe(
+      'target is impossibly far away',
+    );
+    expect(room.requestBuild(ids[0], hq.id, 9e9, 100, 4_500).reason).toBe(
+      'target is impossibly far away',
     );
     expect(room.requestBuild(ids[0], 42 as unknown as string, 100, 100, 5_000).reason).toBe(
       'invalid source node id',

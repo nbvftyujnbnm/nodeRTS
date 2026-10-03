@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { drawSpawnPoints, polygonSpawnPoints, shuffled } from '../src/game/spawn';
 import { GameRoom } from '../src/game/room';
-import { MAX_PLAYERS, SPAWN_MARGIN, WORLD_HEIGHT, WORLD_WIDTH } from '../src/shared/config';
+import {
+  MAX_PLAYERS,
+  SPAWN_AREA_HEIGHT,
+  SPAWN_AREA_WIDTH,
+  SPAWN_MARGIN,
+} from '../src/shared/config';
 
 function sideLengths(points: { x: number; y: number }[]): number[] {
   return points.map((p, i) => {
@@ -25,13 +30,13 @@ describe('spawn layout', () => {
     }
   });
 
-  it('keeps every spawn inside the world, clear of the edge', () => {
+  it('keeps every spawn inside the opening area, clear of its margin', () => {
     for (let count = 2; count <= MAX_PLAYERS; count++) {
       for (const point of polygonSpawnPoints(count)) {
         expect(point.x).toBeGreaterThanOrEqual(SPAWN_MARGIN - 1);
-        expect(point.x).toBeLessThanOrEqual(WORLD_WIDTH - SPAWN_MARGIN + 1);
+        expect(point.x).toBeLessThanOrEqual(SPAWN_AREA_WIDTH - SPAWN_MARGIN + 1);
         expect(point.y).toBeGreaterThanOrEqual(SPAWN_MARGIN - 1);
-        expect(point.y).toBeLessThanOrEqual(WORLD_HEIGHT - SPAWN_MARGIN + 1);
+        expect(point.y).toBeLessThanOrEqual(SPAWN_AREA_HEIGHT - SPAWN_MARGIN + 1);
       }
     }
   });
@@ -44,9 +49,9 @@ describe('spawn layout', () => {
       const touchesEdge = points.some(
         (p) =>
           Math.abs(p.x - SPAWN_MARGIN) <= 1 ||
-          Math.abs(p.x - (WORLD_WIDTH - SPAWN_MARGIN)) <= 1 ||
+          Math.abs(p.x - (SPAWN_AREA_WIDTH - SPAWN_MARGIN)) <= 1 ||
           Math.abs(p.y - SPAWN_MARGIN) <= 1 ||
-          Math.abs(p.y - (WORLD_HEIGHT - SPAWN_MARGIN)) <= 1,
+          Math.abs(p.y - (SPAWN_AREA_HEIGHT - SPAWN_MARGIN)) <= 1,
       );
       expect(touchesEdge, `${count} players`).toBe(true);
     }

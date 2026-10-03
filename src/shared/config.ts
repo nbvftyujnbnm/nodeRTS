@@ -5,8 +5,33 @@
  */
 
 // --- World -------------------------------------------------------------
-export const WORLD_WIDTH = 1600;
-export const WORLD_HEIGHT = 900;
+
+/**
+ * The board is an infinite canvas: there is no wall to build up against, and
+ * nothing stops a network growing in any direction. What limits expansion is
+ * the economy - a node's route distance makes it cost more to supply than it
+ * is worth long before any wall would have stopped you.
+ *
+ * These two are only the area the opening polygon of headquarters is laid out
+ * in, and the region the camera frames at the start. Crossing out of it is
+ * entirely normal.
+ */
+export const SPAWN_AREA_WIDTH = 1600;
+export const SPAWN_AREA_HEIGHT = 900;
+
+/**
+ * Hard sanity limit on any coordinate the server will accept.
+ *
+ * "Infinite" cannot mean "whatever number a client sends": NaN, Infinity or
+ * 1e300 would poison distances, the camera and every intersection test. This
+ * is far outside any reachable position - at the transport penalty, supplying
+ * a node even a tenth of this far out costs fifty times what it delivers.
+ */
+export const MAX_COORDINATE = 500_000;
+
+/** Camera zoom range. Absolute, since there is no fixed board to fit to. */
+export const MIN_ZOOM = 0.03;
+export const MAX_ZOOM = 4;
 
 // --- Simulation cadence ------------------------------------------------
 export const TICK_HZ = 20;

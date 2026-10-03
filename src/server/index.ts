@@ -8,8 +8,6 @@ import {
   MIN_PLAYERS,
   SNAPSHOT_INTERVAL_MS,
   TICK_INTERVAL_MS,
-  WORLD_HEIGHT,
-  WORLD_WIDTH,
 } from '../shared/config';
 import { C2S, S2C } from '../shared/protocol';
 import { diffSnapshot } from '../shared/delta';
@@ -356,7 +354,7 @@ httpServer.listen(PORT, HOST, () => {
   console.log('  ------------------------------------------------------');
   console.log(`  listening      http://${HOST}:${PORT}`);
   console.log(`  local          http://localhost:${PORT}`);
-  console.log(`  world          ${WORLD_WIDTH} x ${WORLD_HEIGHT}`);
+  console.log('  world          infinite canvas');
   console.log(`  simulation     ${Math.round(1000 / TICK_INTERVAL_MS)} Hz tick, ${Math.round(1000 / SNAPSHOT_INTERVAL_MS)} Hz snapshots`);
   console.log(`  players        ${MIN_PLAYERS}-${MAX_PLAYERS} per room`);
   console.log(

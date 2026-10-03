@@ -1,6 +1,6 @@
-import { WORLD_HEIGHT, WORLD_WIDTH, capacityForNodeType } from '../shared/config';
+import { capacityForNodeType } from '../shared/config';
 import type { NodeSnapshot, Snapshot } from '../shared/types';
-import type { Camera, Viewport } from './camera';
+import { visibleBounds, type Bounds, type Camera, type Viewport } from './camera';
 
 /**
  * Screen-space sizes, in CSS pixels. Radii, strokes and text are drawn in world
@@ -34,15 +34,14 @@ export interface RenderState {
 
 const BACKGROUND = '#2a2d33';
 const GRID = '#31353c';
-/** Behind the board, where the viewport does not match 16:9. */
-const OUTSIDE = '#15171b';
+const GRID_MAJOR = '#3a3f48';
 
 export function render(ctx: CanvasRenderingContext2D, state: RenderState): void {
   const { camera, view, dpr } = state;
 
-  // Letterbox area outside the board.
+  // The board has no edges, so the background simply is the viewport.
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = OUTSIDE;
+  ctx.fillStyle = BACKGROUND;
   ctx.fillRect(0, 0, view.width, view.height);
 
   // From here on, draw in world coordinates.
@@ -53,9 +52,7 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   /** World units per CSS pixel: multiply screen sizes by this. */
   const k = 1 / camera.scale;
 
-  ctx.fillStyle = BACKGROUND;
-  ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-  drawGrid(ctx, k);
+  drawGrid(ctx, visibleBounds(camera, view), camera.scale, k);
 
   const snapshot = state.snapshot;
   if (!snapshot) return;
@@ -271,19 +268,70 @@ function drawNode(
   ctx.fillText(String(Math.floor(node.stock)), node.x, barY + 8 * k);
 }
 
-function drawGrid(ctx: CanvasRenderingContext2D, k: number): void {
-  ctx.strokeStyle = GRID;
-  ctx.lineWidth = k;
-  ctx.beginPath();
-  for (let x = 100; x < WORLD_WIDTH; x += 100) {
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, WORLD_HEIGHT);
+/**
+ * Grid over whatever is on screen.
+ *
+ * On an infinite canvas the grid is the only thing telling you that you are
+ * moving, so the spacing adapts to the zoom: it steps through 1-2-5 x 10^n and
+ * picks the one that lands closest to a comfortable on-screen size, with every
+ * fifth line brighter so there is something to judge distance against.
+ */
+function drawGrid(
+  ctx: CanvasRenderingContext2D,
+  bounds: Bounds,
+  scale: number,
+  k: number,
+): void {
+  const spacing = gridSpacing(scale);
+  const major = spacing * 5;
+
+  const firstX = Math.floor(bounds.minX / spacing) * spacing;
+  const firstY = Math.floor(bounds.minY / spacing) * spacing;
+  // Safety net: never try to draw more lines than could possibly be useful.
+  const maxLines = 400;
+
+  for (const pass of [false, true]) {
+    ctx.strokeStyle = pass ? GRID_MAJOR : GRID;
+    ctx.lineWidth = (pass ? 1.4 : 1) * k;
+    ctx.beginPath();
+
+    let drawn = 0;
+    for (let x = firstX; x <= bounds.maxX && drawn < maxLines; x += spacing, drawn++) {
+      if ((Math.abs(Math.round(x / major) * major - x) < spacing / 2) !== pass) continue;
+      ctx.moveTo(x, bounds.minY);
+      ctx.lineTo(x, bounds.maxY);
+    }
+    drawn = 0;
+    for (let y = firstY; y <= bounds.maxY && drawn < maxLines; y += spacing, drawn++) {
+      if ((Math.abs(Math.round(y / major) * major - y) < spacing / 2) !== pass) continue;
+      ctx.moveTo(bounds.minX, y);
+      ctx.lineTo(bounds.maxX, y);
+    }
+    ctx.stroke();
   }
-  for (let y = 100; y < WORLD_HEIGHT; y += 100) {
-    ctx.moveTo(0, y);
-    ctx.lineTo(WORLD_WIDTH, y);
+}
+
+/**
+ * World units between grid lines, chosen to sit near 110 screen pixels.
+ *
+ * Picks the 1-2-5 step closest to the target in log space rather than the next
+ * one up: rounding up alone let the spacing drift to two and a half times the
+ * target, which reads as a nearly empty screen at some zoom levels.
+ */
+export function gridSpacing(scale: number, targetScreenPx = 110): number {
+  const raw = targetScreenPx / Math.max(scale, 1e-9);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
+  let best = magnitude;
+  let bestError = Infinity;
+  for (const step of [1, 2, 5, 10]) {
+    const candidate = step * magnitude;
+    const error = Math.abs(Math.log(candidate / raw));
+    if (error < bestError) {
+      bestError = error;
+      best = candidate;
+    }
   }
-  ctx.stroke();
+  return best;
 }
 
 function clamp01(value: number): number {

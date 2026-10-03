@@ -1,7 +1,7 @@
 import { GameRoom } from '../src/game/room';
 import { addEdge, addNode, createWorld, type World } from '../src/game/world';
 import type { GameNode } from '../src/shared/types';
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/shared/config';
+import { SPAWN_AREA_HEIGHT, SPAWN_AREA_WIDTH } from '../src/shared/config';
 
 export interface Scenario {
   world: World;
@@ -79,16 +79,16 @@ export function finishBuild(room: GameRoom, startedAt: number, buildTimeSeconds:
 /**
  * A point `distance` away from `from`, aimed at the middle of the map.
  *
- * Spawns sit near the edge, so any test that builds in a fixed compass
- * direction will sooner or later aim out of the world and fail for the wrong
- * reason. Aiming inwards is always legal.
+ * Spawns sit around a polygon, so a test that builds in a fixed compass
+ * direction can wander into another player's opening. Aiming inwards keeps
+ * these tests about what they are testing.
  */
 export function towardCentre(
   from: { x: number; y: number },
   distance: number,
 ): { x: number; y: number } {
-  const dx = WORLD_WIDTH / 2 - from.x;
-  const dy = WORLD_HEIGHT / 2 - from.y;
+  const dx = SPAWN_AREA_WIDTH / 2 - from.x;
+  const dy = SPAWN_AREA_HEIGHT / 2 - from.y;
   const len = Math.hypot(dx, dy) || 1;
   return { x: from.x + (dx / len) * distance, y: from.y + (dy / len) * distance };
 }
@@ -98,8 +98,8 @@ export function besideCentreLine(
   from: { x: number; y: number },
   distance: number,
 ): { x: number; y: number } {
-  const dx = WORLD_WIDTH / 2 - from.x;
-  const dy = WORLD_HEIGHT / 2 - from.y;
+  const dx = SPAWN_AREA_WIDTH / 2 - from.x;
+  const dy = SPAWN_AREA_HEIGHT / 2 - from.y;
   const len = Math.hypot(dx, dy) || 1;
   return { x: from.x + (-dy / len) * distance, y: from.y + (dx / len) * distance };
 }

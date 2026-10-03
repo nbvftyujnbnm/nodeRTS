@@ -4,8 +4,8 @@ import {
   HQ_ASSAULT_MAX_RANGE,
   MAX_BUILD_DISTANCE,
   MIN_PLAYERS,
-  WORLD_HEIGHT,
-  WORLD_WIDTH,
+  SPAWN_AREA_HEIGHT,
+  SPAWN_AREA_WIDTH,
 } from '../shared/config';
 import { evaluateBuild, type BuildContext } from '../game/validate';
 import { applySnapshotMessage } from '../shared/delta';
@@ -20,9 +20,12 @@ import type {
 } from './transport';
 import { nodeRadius, render, type PreviewLine, type RenderState } from './render';
 import {
+  boundsOfPoints,
   clampCamera,
   createCamera,
-  isFitted,
+  fitBounds,
+  isZoomedOutFully,
+  padBounds,
   startingCamera,
   zoomAt,
   type Camera,
@@ -115,8 +118,8 @@ const state: ClientState = {
   hoverNodeId: null,
   mouseWorld: null,
   status: 'menu',
-  camera: { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, scale: 1 },
-  view: { width: WORLD_WIDTH, height: WORLD_HEIGHT },
+  camera: { x: SPAWN_AREA_WIDTH / 2, y: SPAWN_AREA_HEIGHT / 2, scale: 1 },
+  view: { width: SPAWN_AREA_WIDTH, height: SPAWN_AREA_HEIGHT },
   dpr: 1,
 };
 
@@ -491,11 +494,18 @@ function resizeCanvas(): void {
 
 function setCamera(camera: Camera): void {
   state.camera = clampCamera(camera, state.view);
-  btnZoomOut.disabled = isFitted(state.camera, state.view);
+  btnZoomOut.disabled = isZoomedOutFully(state.camera);
 }
 
+/**
+ * On an infinite canvas "fit" has to mean fit the game, not fit a board: frame
+ * everything that exists, so panning out into empty space is always one tap
+ * from getting back. With nothing built yet, frame where everyone starts.
+ */
 function fitBoard(): void {
-  setCamera(createCamera(state.view));
+  const nodes = state.snapshot?.nodes ?? [];
+  const bounds = boundsOfPoints(nodes);
+  setCamera(bounds ? fitBounds(padBounds(bounds, 80), state.view) : createCamera(state.view));
 }
 
 /** One-shot: frame the player's own HQ when their first real snapshot lands. */

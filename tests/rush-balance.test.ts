@@ -8,8 +8,6 @@ import {
   MAX_BUILD_DISTANCE,
   MIN_BUILD_DISTANCE,
   TICK_INTERVAL_MS,
-  WORLD_HEIGHT,
-  WORLD_WIDTH,
   buildCostForDistance,
 } from '../src/shared/config';
 import { addEdge, addNode, findHq } from '../src/game/world';
@@ -74,8 +72,8 @@ function simulateRush(
     const assaulting = len <= HQ_ASSAULT_MAX_RANGE;
     const reach = assaulting ? len : Math.min(MAX_BUILD_DISTANCE, len - standOff);
 
-    const targetX = Math.max(0, Math.min(WORLD_WIDTH, front.x + (dx / len) * reach));
-    const targetY = Math.max(0, Math.min(WORLD_HEIGHT, front.y + (dy / len) * reach));
+    const targetX = front.x + (dx / len) * reach;
+    const targetY = front.y + (dy / len) * reach;
 
     const result = room.requestBuild(attacker.id, front.id, targetX, targetY, now);
     if (result.ok && !assaulting) relays++;

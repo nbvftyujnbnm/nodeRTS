@@ -244,11 +244,20 @@ Dragging from a selected node shows the live preview - distance, cost and
 whether it is legal - before you commit, which is the only way to get that
 feedback on a touch screen where there is no hover.
 
-The board is a fixed 1600x900 world; the canvas fills whatever viewport it is
-given and the camera decides what you see. You cannot zoom out past the whole
-board or drag it off screen. A match opens fully fitted on anything at least as
-wide as 16:9, and opens closer in, framed on your own HQ, on a portrait phone
-where a fitted board would be too small to read.
+**The board is an infinite canvas.** There is no edge to build up against and
+no limit on panning: a network can grow in any direction, including into
+negative coordinates. The grid adapts its spacing to the zoom so you can always
+tell you are moving, and the **fit** button frames everything that exists, so
+wandering off into empty space is always one tap from getting back. A match
+opens framed on the starting area, or closer in on your own HQ on a portrait
+phone where a wider view would be too small to read.
+
+What stops a player running away forever is the economy, not a wall. A node's
+route distance makes it cost more to supply than it returns long before any
+boundary would have stopped you - ten times further out delivers less than a
+fifth as much, and a bigger economy is what buys reach. The server still
+refuses absurd coordinates, because "infinite" cannot mean "whatever number a
+client sends".
 
 While aiming, the preview line shows the distance, the resource cost and whether
 the build is legal. **Green = valid, red = invalid** (the reason is printed in
@@ -455,10 +464,11 @@ through them to what lies beyond.
 that builds, captures and deletes nodes and asserts a delta-fed client ends up
 byte-identical to one receiving full snapshots.
 
-`camera.test.ts` covers the zoom and pan maths: screen/world round-trips, the
-board never being zoomed out past fitting or dragged off screen, an axis that
-fully fits staying centred, and the world point under the cursor or pinch
-staying put while zooming.
+`camera.test.ts` covers the zoom and pan maths on an unbounded board:
+screen/world round-trips far from the origin, panning that never hits a limit,
+the zoom range, fitting an arbitrary content box, a camera that cannot be made
+to produce NaN, the world point under the cursor or pinch staying put while
+zooming, and grid spacing that stays readable at every zoom.
 
 `economy.test.ts` guards against the late-game stall: a 20-node network must
 still be able to fund builds, the HQ must not stay drained, income must scale
@@ -547,5 +557,9 @@ The notable ones:
   small epsilon keeps floating point from inventing junctions at endpoints, and
   intersections landing within 1.5px of an existing owned node reuse that node
   instead of stacking a duplicate.
-- **Snapshots are full state.** At this scale (tens of nodes) delta encoding
-  would be pure overhead.
+- **The board is unbounded, and the economy is the boundary.** A wall would
+  have been simpler, but the transport penalty already makes distance expensive
+  in a way that scales with how much economy you have to spend on it, which is
+  a more interesting limit than a line on the map. The one hard rule is a sanity
+  cap on coordinates, far outside anything reachable, so a malformed or
+  malicious request cannot poison geometry and the camera.
